@@ -27,17 +27,23 @@ defmodule Astarte.Housekeeping.Realms.Core do
   def update_realm(realm_name, changes) do
     Logger.info("Updating realm #{realm_name}", tag: "realm_update_start")
 
-    with {:ok, realm} <- Queries.get_realm(realm_name) do
-      updated_realm =
-        Enum.reduce(changes, realm, fn {field, changed_value}, acc_realm ->
-          case update_realm_field(acc_realm, field, changed_value) do
-            :ok -> %{acc_realm | field => changed_value}
-            {:ok, realm} -> realm
-          end
-        end)
+    case Queries.get_realm(realm_name) do
+      {:ok, realm} ->
+        updated_realm = apply_realm_changes(realm, changes)
+        {:ok, updated_realm}
 
-      {:ok, updated_realm}
+      {:error, reason} ->
+        {:error, reason}
     end
+  end
+
+  defp apply_realm_changes(realm, changes) do
+    Enum.reduce(changes, realm, fn {field, value}, acc_realm ->
+      case update_realm_field(acc_realm, field, value) do
+        :ok -> %{acc_realm | field => value}
+        {:ok, updated} -> updated
+      end
+    end)
   end
 
   defp update_realm_field(realm, :jwt_public_key_pem, jwt_public_key_pem) do

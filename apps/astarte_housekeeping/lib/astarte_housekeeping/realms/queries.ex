@@ -194,31 +194,29 @@ defmodule Astarte.Housekeeping.Realms.Queries do
     keyspace_name = Realm.keyspace_name(realm_name)
 
     with {:ok, replication_map_str} <- build_replication_map_str(replication) do
-      if opts[:async] do
-        {:ok, _pid} =
-          Task.start(fn ->
-            do_create_realm(
-              realm_name,
-              keyspace_name,
-              public_key_pem,
-              replication_map_str,
-              device_limit,
-              max_retention
-            )
-          end)
-
-        {:ok, :started}
-      else
-        do_create_realm(
-          realm_name,
-          keyspace_name,
-          public_key_pem,
-          replication_map_str,
-          device_limit,
-          max_retention
-        )
-      end
+      dispatch_creation(
+        realm_name,
+        keyspace_name,
+        public_key_pem,
+        replication_map_str,
+        device_limit,
+        max_retention,
+        opts[:async]
+      )
     end
+  end
+
+  defp dispatch_creation(realm_name, keyspace_name, pk, repl, limit, ret, true) do
+    {:ok, _pid} =
+      Task.start(fn ->
+        do_create_realm(realm_name, keyspace_name, pk, repl, limit, ret)
+      end)
+
+    {:ok, :started}
+  end
+
+  defp dispatch_creation(realm_name, keyspace_name, pk, repl, limit, ret, _async) do
+    do_create_realm(realm_name, keyspace_name, pk, repl, limit, ret)
   end
 
   defp do_create_realm(
@@ -284,22 +282,24 @@ defmodule Astarte.Housekeeping.Realms.Queries do
 
   defp check_replication(datacenter_replication_factors)
        when is_map(datacenter_replication_factors) do
-    with {:ok, local_datacenter} <- get_local_datacenter() do
-      Enum.reduce_while(datacenter_replication_factors, :ok, fn
-        {datacenter, replication_factor}, _acc ->
-          opts =
-            if datacenter == local_datacenter do
-              [local: true]
-            else
-              []
-            end
+    case get_local_datacenter() do
+      {:ok, local_datacenter} ->
+        check_all_datacenters(datacenter_replication_factors, local_datacenter)
 
-          case check_replication_for_datacenter(datacenter, replication_factor, opts) do
-            :ok -> {:cont, :ok}
-            {:error, reason} -> {:halt, {:error, reason}}
-          end
-      end)
+      {:error, reason} ->
+        {:error, reason}
     end
+  end
+
+  defp check_all_datacenters(factors, local_dc) do
+    Enum.reduce_while(factors, :ok, fn {dc, rf}, _acc ->
+      opts = if dc == local_dc, do: [local: true], else: []
+
+      case check_replication_for_datacenter(dc, rf, opts) do
+        :ok -> {:cont, :ok}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
   end
 
   defp build_replication_map_str(replication_factor)
