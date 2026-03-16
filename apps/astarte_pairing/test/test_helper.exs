@@ -37,5 +37,6 @@ Mimic.copy(Astarte.Pairing.FDO.ServiceInfo)
 Mimic.copy(Astarte.Pairing.Queries)
 Mimic.copy(DateTime)
 Mimic.copy(HTTPoison)
+Mimic.copy(Astarte.Pairing.FDO.OpenBao.Core)
 
 ExUnit.start(capture_log: true)

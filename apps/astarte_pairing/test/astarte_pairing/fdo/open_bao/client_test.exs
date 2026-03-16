@@ -135,6 +135,38 @@ defmodule Astarte.Pairing.FDO.OpenBao.ClientTest do
     end
   end
 
+  describe "sign/4" do
+    alias Astarte.Pairing.FDO.OpenBao.Core
+
+    test "delegates to Core.sign/5 with default empty options" do
+      key_name = "my_device_key"
+      payload = "test_payload"
+      alg = :es256
+
+      expect(Core, :sign, fn ^key_name, ^payload, ^alg, nil, nil ->
+        {:ok, "raw_signature"}
+      end)
+
+      assert {:ok, "raw_signature"} = Client.sign(key_name, payload, alg)
+    end
+
+    test "delegates to Core.sign/5 extracting auth_token and namespace" do
+      key_name = "my_rsa_key"
+      payload = "test_payload"
+      alg = :ps256
+      auth_token = "my_token"
+      namespace = "my__namespace"
+
+      opts = [auth_token: auth_token, namespace: namespace]
+
+      expect(Core, :sign, fn ^key_name, ^payload, ^alg, ^auth_token, ^namespace ->
+        {:ok, "raw_signature"}
+      end)
+
+      assert {:ok, "raw_signature"} = Client.sign(key_name, payload, alg, opts)
+    end
+  end
+
   defp token_authentication(_context) do
     token = UUID.uuid4()
     stub(Config, :bao_authentication, fn -> {:ok, {:token, token}} end)

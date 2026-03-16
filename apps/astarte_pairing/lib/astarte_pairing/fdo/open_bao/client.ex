@@ -24,6 +24,7 @@ defmodule Astarte.Pairing.FDO.OpenBao.Client do
   use HTTPoison.Base
 
   alias Astarte.Pairing.Config
+  alias Astarte.Pairing.FDO.OpenBao.Core
 
   # TODO add implementation for LIST operations
 
@@ -62,4 +63,11 @@ defmodule Astarte.Pairing.FDO.OpenBao.Client do
 
   defp authentication_header?({header, _value}),
     do: String.downcase(header, :ascii) in ["x-vault-token", "authorization"]
+
+  def sign(key_name, payload, alg, opts \\ []) do
+    auth_token = Keyword.get(opts, :auth_token, nil)
+    namespace = Keyword.get(opts, :namespace, nil)
+
+    Core.sign(key_name, payload, alg, auth_token, namespace)
+  end
 end
