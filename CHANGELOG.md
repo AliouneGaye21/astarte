@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## Unreleased
 
+- [astarte_housekeeping] Changed logger config to make the metadata fields appear in logfmt log output.
+
 ## [1.3.0-rc.2] - 2026-04-08
 
 ### Added
