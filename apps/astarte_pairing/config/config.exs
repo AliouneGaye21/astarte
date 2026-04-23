@@ -34,7 +34,7 @@ config :astarte_pairing, Astarte.PairingWeb.Endpoint,
   render_errors: [view: Astarte.PairingWeb.ErrorView, accepts: ~w(json)]
 
 # Configures Elixir's Logger
-config :logger, :default_formatter,
+config :logger, :console,
   format: "$time $metadata[$level] $message\n",
   metadata: [:request_id, :tag, :realm, :method, :hw_id, :common_name]
 
