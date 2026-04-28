@@ -82,6 +82,10 @@ defmodule Astarte.HousekeepingWeb.ApiSpec do
         %Tag{
           name: "realm",
           description: "APIs for managing Realms."
+        },
+        %Tag{
+          name: "version",
+          description: "Retrieve version information of the API."
         }
       ]
     }
