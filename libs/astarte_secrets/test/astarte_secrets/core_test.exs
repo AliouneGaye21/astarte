@@ -653,4 +653,48 @@ defmodule Astarte.Secrets.CoreTest do
       assert {:ok, ^original_pt} = Secrets.unwrap_dek(key_name, ct, namespace)
     end
   end
+
+  describe "encrypt_with_dek/3 and decrypt_with_dek/5" do
+    test "round-trips: decrypt recovers the original plaintext" do
+      dek = :crypto.strong_rand_bytes(32)
+      plaintext = "my device payload"
+      {:ok, %{ciphertext: ct, tag: tag, iv: iv}} = Core.encrypt_with_dek(plaintext, dek)
+      assert {:ok, ^plaintext} = Core.decrypt_with_dek(ct, tag, iv, dek)
+    end
+
+    test "raises FunctionClauseError when DEK is wrong size (encrypt)" do
+      assert_raise FunctionClauseError, fn ->
+        Core.encrypt_with_dek("hello", :crypto.strong_rand_bytes(16))
+      end
+    end
+
+    test "raises FunctionClauseError when DEK is wrong size (decrypt)" do
+      dek = :crypto.strong_rand_bytes(32)
+      {:ok, %{ciphertext: ct, tag: tag, iv: iv}} = Core.encrypt_with_dek("hello", dek)
+
+      assert_raise FunctionClauseError, fn ->
+        Core.decrypt_with_dek(ct, tag, iv, :crypto.strong_rand_bytes(16))
+      end
+    end
+
+    test "returns :error when authentication tag is tampered" do
+      dek = :crypto.strong_rand_bytes(32)
+
+      {:ok, %{ciphertext: ct, tag: <<first, rest::binary>>, iv: iv}} =
+        Core.encrypt_with_dek("data", dek)
+
+      assert :error =
+               Core.decrypt_with_dek(ct, <<Bitwise.bxor(first, 0xFF), rest::binary>>, iv, dek)
+    end
+
+    test "round-trips with AAD and returns :error on AAD mismatch" do
+      dek = :crypto.strong_rand_bytes(32)
+
+      {:ok, %{ciphertext: ct, tag: tag, iv: iv}} =
+        Core.encrypt_with_dek("payload", dek, "device-abc")
+
+      assert {:ok, "payload"} = Core.decrypt_with_dek(ct, tag, iv, dek, "device-abc")
+      assert :error = Core.decrypt_with_dek(ct, tag, iv, dek, "wrong-device")
+    end
+  end
 end

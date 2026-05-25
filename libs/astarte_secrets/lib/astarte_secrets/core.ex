@@ -94,6 +94,47 @@ defmodule Astarte.Secrets.Core do
     :error
   end
 
+  @doc """
+  Encrypts `plaintext` using AES-256-GCM with the provided DEK.
+  Returns `{:ok, %{ciphertext: binary(), tag: binary(), iv: binary()}}` on success.
+
+  The `tag` (16 bytes) and `iv` must be stored alongside the `ciphertext` so the
+  payload can later be decrypted with `decrypt_with_dek/5`.
+  """
+  @spec encrypt_with_dek(binary(), binary(), binary()) ::
+          {:ok, %{ciphertext: binary(), tag: binary(), iv: binary()}}
+  def encrypt_with_dek(plaintext, dek, aad \\ <<>>)
+      when is_binary(plaintext) and byte_size(dek) == 32 and is_binary(aad) do
+    iv = :crypto.strong_rand_bytes(12)
+
+    {ciphertext, tag} =
+      :crypto.crypto_one_time_aead(:aes_256_gcm, dek, iv, plaintext, aad, true)
+
+    {:ok, %{ciphertext: ciphertext, tag: tag, iv: iv}}
+  end
+
+  @doc """
+  Decrypts `ciphertext` using AES-256-GCM with the provided DEK.
+
+  Authenticates the ciphertext using the 16-byte `tag` and the 12-byte `iv`
+  that were produced during encryption. Returns `{:ok, plaintext}` on success
+  or `:error` if authentication fails.
+  """
+  @spec decrypt_with_dek(binary(), binary(), binary(), binary(), binary()) ::
+          {:ok, binary()} | :error
+  def decrypt_with_dek(ciphertext, tag, iv, dek, aad \\ <<>>)
+      when is_binary(ciphertext) and byte_size(tag) == 16 and byte_size(iv) == 12 and
+             byte_size(dek) == 32 and is_binary(aad) do
+    case :crypto.crypto_one_time_aead(:aes_256_gcm, dek, iv, ciphertext, aad, tag, false) do
+      :error ->
+        Logger.warning("AES-256-GCM decryption failed: authentication tag mismatch")
+        :error
+
+      plaintext when is_binary(plaintext) ->
+        {:ok, plaintext}
+    end
+  end
+
   # TODO: add a proper public API (Astarte.Secrets) for creating/managing the KEK
   # (mount transit + create AES-256 key)
   def create_encryption_key(key_name, namespace) do

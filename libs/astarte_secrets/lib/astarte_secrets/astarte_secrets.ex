@@ -166,6 +166,45 @@ defmodule Astarte.Secrets do
   end
 
   @doc """
+  Encrypts `payload` using AES-256-GCM with the provided plaintext DEK.
+  Generates a fresh 12-byte IV on every call. Returns
+  `{:ok, %{ciphertext: binary(), tag: binary(), iv: binary()}}` on success.
+
+  The optional `aad` cryptographically binds the ciphertext to a specific context.
+  """
+  @spec encrypt_with_dek(binary(), binary(), binary()) ::
+          {:ok, %{ciphertext: binary(), tag: binary(), iv: binary()}} | :error
+  def encrypt_with_dek(payload, dek, aad \\ <<>>)
+
+  def encrypt_with_dek(payload, dek, aad)
+      when is_binary(payload) and byte_size(dek) == 32 and is_binary(aad) do
+    Core.encrypt_with_dek(payload, dek, aad)
+  end
+
+  def encrypt_with_dek(_payload, _dek, _aad), do: :error
+
+  @doc """
+  Decrypts `ciphertext` using AES-256-GCM with the provided plaintext DEK.
+
+  Requires the `tag` (16 bytes) and `iv` (12 bytes) that were produced during
+  encryption. Returns `{:ok, plaintext}` on success, or `:error` if authentication
+  fails.
+
+  If `aad` was supplied during encryption, the identical value must be passed here.
+  """
+  @spec decrypt_with_dek(binary(), binary(), binary(), binary(), binary()) ::
+          {:ok, binary()} | :error
+  def decrypt_with_dek(ciphertext, tag, iv, dek, aad \\ <<>>)
+
+  def decrypt_with_dek(ciphertext, tag, iv, dek, aad)
+      when is_binary(ciphertext) and byte_size(tag) == 16 and byte_size(iv) == 12 and
+             byte_size(dek) == 32 and is_binary(aad) do
+    Core.decrypt_with_dek(ciphertext, tag, iv, dek, aad)
+  end
+
+  def decrypt_with_dek(_ciphertext, _tag, _iv, _dek, _aad), do: :error
+
+  @doc """
   Decrypts the provided ciphertext using OpenBao Transit Engine.
   Useful for ASYMKEX where the device encrypts a secret with the owner's RSA public key.
   """
