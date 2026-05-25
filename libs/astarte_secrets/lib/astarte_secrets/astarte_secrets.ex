@@ -258,5 +258,10 @@ defmodule Astarte.Secrets do
 
         :error
     end
+  Encrypts the provided plaintext using OpenBao Transit Engine.
+  """
+  @spec encrypt(String.t(), binary(), list()) :: {:ok, String.t()} | :error
+  def encrypt(key_name, plaintext, options \\ []) do
+    Core.encrypt(key_name, plaintext, options)
   end
 end

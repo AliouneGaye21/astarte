@@ -695,6 +695,28 @@ defmodule Astarte.Secrets.CoreTest do
 
       assert {:ok, "payload"} = Core.decrypt_with_dek(ct, tag, iv, dek, "device-abc")
       assert :error = Core.decrypt_with_dek(ct, tag, iv, dek, "wrong-device")
+  describe "encrypt/3" do
+    setup :http_stubs_setup
+
+    test "returns ciphertext on HTTP 200" do
+      body = Jason.encode!(%{"data" => %{"ciphertext" => "vault:v1:encoded_data"}})
+
+      expect(Client, :post, fn _url, req_body, _headers, _opts ->
+        {:ok, decoded_req} = Jason.decode(req_body)
+        assert decoded_req["plaintext"] == Base.encode64("my secret data")
+        {:ok, %HTTPoison.Response{status_code: 200, body: body}}
+      end)
+
+      assert {:ok, "vault:v1:encoded_data"} =
+               Core.encrypt("my-key", "my secret data", namespace: "ns")
+    end
+
+    test "returns :error on HTTP error" do
+      expect(Client, :post, fn _url, _body, _headers, _opts ->
+        {:ok, %HTTPoison.Response{status_code: 400, body: "bad request"}}
+      end)
+
+      assert :error = Core.encrypt("my-key", "my secret data", namespace: "ns")
     end
   end
 end

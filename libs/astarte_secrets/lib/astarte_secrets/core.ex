@@ -269,6 +269,40 @@ defmodule Astarte.Secrets.Core do
   end
 
   @doc """
+  Encrypts the provided raw binary plaintext using OpenBao Transit Engine.
+  """
+  @spec encrypt(String.t(), binary(), list()) :: {:ok, String.t()} | :error
+  def encrypt(key_name, plaintext, options \\ []) do
+    namespace = Keyword.fetch!(options, :namespace)
+    client_opts = [namespace: namespace] ++ Keyword.take(options, [:token])
+
+    req_body =
+      %{
+        plaintext: Base.encode64(plaintext)
+      }
+      |> Jason.encode!()
+
+    headers = [{"Content-Type", "application/json"}]
+
+    case Client.post("/transit/encrypt/#{key_name}", req_body, headers, client_opts) do
+      {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+        with {:ok, data} <- parse_json_data(body),
+             ciphertext when is_binary(ciphertext) <- Map.get(data, "ciphertext") do
+          {:ok, ciphertext}
+        else
+          _ -> :error
+        end
+
+      error_resp ->
+        Logger.error(
+          "Encountered HTTP error while encrypting with key #{key_name}: #{inspect(error_resp)}"
+        )
+
+        :error
+    end
+  end
+
+  @doc """
   Posts pre-built BYOK `ciphertext` to the OpenBao transit import endpoint.
 
   `opts` can include:
