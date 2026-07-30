@@ -170,6 +170,73 @@ defmodule Astarte.DataUpdaterPlant.DataUpdater.QueriesTest do
     end
   end
 
+  describe "update_device_introspection/4" do
+    test "does not delete instrospection with empty map", context do
+      %{realm_name: realm_name, device_id: device_id} = context
+      result = Queries.get_device_status(realm_name, device_id) |> dbg()
+
+      Queries.update_device_introspection!(
+        realm_name,
+        device_id,
+        %{"" => 1},
+        %{}
+      )
+
+      # Queries.update_device_introspection!(realm_name, device_id, nil, nil)
+
+      result = Queries.get_device_status(realm_name, device_id) |> dbg()
+      # assert introspection is not nil, even if empty
+      assert result.introspection == %{}
+    end
+  end
+
+  describe "process_introspection/4" do
+    test "aggiunge nuove interfacce e rimuove le vecchie aggiornando lo state", %{state: state} do
+      # L'input: il device dichiara una nuova interfaccia e rimuove quella vecchia
+      new_introspection_list = [
+        {"com.example.NewSensor", 1, 0}
+      ]
+
+      payload = "dummy_payload"
+      timestamp = System.os_time(:microsecond)
+      timestamp_ms = div(timestamp, 10_000)
+
+      # 2. Mock delle chiamate esterne (Triggers e DB) tramite Mimic
+      TriggersHandler
+      |> expect(:incoming_introspection, fn "test_realm", "device_123", _, ^payload, _ -> :ok end)
+
+      Queries
+      |> expect(:fetch_device_introspection_minors, fn "test_realm", "device_123" ->
+        {:ok, %{"com.example.Sensor" => 0}}
+      end)
+      |> expect(:add_old_interfaces, fn "test_realm", "device_123", _old_introspection -> :ok end)
+      |> expect(:remove_old_interfaces, fn "test_realm", "device_123", _readded -> :ok end)
+      |> expect(:update_device_introspection!, fn "test_realm",
+                                                  "device_123",
+                                                  new_intro,
+                                                  new_minor ->
+        assert new_intro == %{"com.example.NewSensor" => 1}
+        assert new_minor == %{"com.example.NewSensor" => 0}
+        :ok
+      end)
+
+      # 3. Esecuzione della funzione
+      result =
+        DataUpdater.process_introspection(state, new_introspection_list, payload, timestamp)
+
+      # 4. Asserzioni sul risultato finale
+      assert {:ack, :ok, final_state} = result
+
+      # Verifica che lo stato sia stato aggiornato correttamente
+      assert final_state.introspection == %{"com.example.NewSensor" => 1}
+      assert final_state.total_received_msgs == 1
+      assert final_state.total_received_bytes == byte_size(payload)
+
+      # Verifica che la vecchia interfaccia sia stata rimossa dalla cache
+      refute Map.has_key?(final_state.interfaces, "com.example.Sensor")
+    end
+  end
+
   describe "set_pending_empty_cache/3" do
     setup %{realm_name: realm_name, astarte_instance_id: astarte_instance_id} do
       device_id = Device.random_device_id()

@@ -457,6 +457,7 @@ defmodule Astarte.DataUpdaterPlant.DataUpdater.Queries do
         :total_received_msgs,
         :total_received_bytes,
         :introspection,
+        :introspection_minor,
         :exchanged_bytes_by_interface,
         :exchanged_msgs_by_interface
       ])
@@ -471,6 +472,7 @@ defmodule Astarte.DataUpdaterPlant.DataUpdater.Queries do
     %{
       capabilities: capabilities,
       introspection: stats.introspection,
+      introspection_minor: stats.introspection_minor,
       total_received_msgs: stats.total_received_msgs,
       total_received_bytes: stats.total_received_bytes,
       initial_interface_exchanged_bytes: stats.exchanged_bytes_by_interface,
