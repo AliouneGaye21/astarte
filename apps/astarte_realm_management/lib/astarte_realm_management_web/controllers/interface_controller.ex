@@ -20,6 +20,12 @@ defmodule Astarte.RealmManagementWeb.InterfaceController do
   use Astarte.RealmManagementWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_list_interfaces", target: :realm] when action in [:index]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_install_interface", target: :realm] when action in [:create]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_read", target: :interface, target_id_param: "interface_name"] when action in [:show]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_update", target: :interface, target_id_param: "interface_name"] when action in [:update]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_delete", target: :interface, target_id_param: "interface_name"] when action in [:delete]
+
   alias Astarte.Core.Interface
   alias Astarte.RealmManagement.Interfaces
   alias Astarte.RealmManagement.Interfaces.InterfacesListOptions

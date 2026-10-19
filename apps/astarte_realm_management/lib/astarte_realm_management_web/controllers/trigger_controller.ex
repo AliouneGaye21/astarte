@@ -20,6 +20,11 @@ defmodule Astarte.RealmManagementWeb.TriggerController do
   use Astarte.RealmManagementWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_list_triggers", target: :realm] when action in [:index]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_create_trigger", target: :realm] when action in [:create]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_read", target: :trigger, target_id_param: "trigger_name"] when action in [:show]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_delete", target: :trigger, target_id_param: "trigger_name"] when action in [:delete]
+
   alias Astarte.RealmManagement.Triggers
   alias Astarte.RealmManagement.Triggers.Trigger
   alias OpenApiSpex.{Reference, Schema}

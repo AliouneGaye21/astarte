@@ -275,6 +275,19 @@ defmodule Astarte.PairingWeb.OwnershipVoucherController do
     end
   end
 
+  @doc """
+  Deletes an ownership voucher.
+  """
+  def delete(conn, %{"realm_name" => realm_name, "guid" => guid}) do
+    case Astarte.DataAccess.FDO.Queries.delete_ownership_voucher(realm_name, guid) do
+      {:ok, _} ->
+        send_resp(conn, 204, "")
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   defp ensure_ownership_voucher_parameter(%{"ownership_voucher" => pem})
        when is_binary(pem) and pem != "",
        do: {:ok, pem}

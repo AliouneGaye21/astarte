@@ -20,6 +20,11 @@ defmodule Astarte.RealmManagementWeb.TriggerPolicyController do
   use Astarte.RealmManagementWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_list_trigger_policies", target: :realm] when action in [:index]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_create_trigger_policy", target: :realm] when action in [:create]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_read", target: :trigger_policy, target_id_param: "policy_name"] when action in [:show]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_delete", target: :trigger_policy, target_id_param: "policy_name"] when action in [:delete]
+
   alias Astarte.Core.Triggers.Policy
   alias Astarte.RealmManagement.Triggers.Policies
   alias OpenApiSpex.{Reference, Schema}

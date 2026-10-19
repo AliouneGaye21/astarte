@@ -149,7 +149,7 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGA do
   defp object(:device, realm_name, arguments),
     do: object({:device, :hw_id}, realm_name, arguments)
 
-  defp object({type, arg}, _realm_name, arguments) do
+  defp object({type, arg}, realm_name, arguments) do
     case Map.get(arguments, arg) do
       nil ->
         Logger.warning("AuthorizeFGA: a #{inspect(type)}-target field was called without #{arg}")
@@ -157,7 +157,7 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGA do
         {:error, "Forbidden: OpenFGA denied access for this action"}
 
       id ->
-        {:ok, "#{type}:#{id}"}
+        {:ok, "#{type}:#{realm_name}/#{id}"}
     end
   end
 end

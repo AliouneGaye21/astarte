@@ -20,6 +20,8 @@ defmodule Astarte.RealmManagementWeb.DeviceController do
   use Astarte.RealmManagementWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_delete", target: :device, target_id_param: "device_id"] when action in [:delete]
+
   alias Astarte.RealmManagement.Devices
   alias OpenApiSpex.{Reference, Response}
 

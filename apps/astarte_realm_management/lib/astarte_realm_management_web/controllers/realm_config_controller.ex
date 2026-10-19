@@ -20,6 +20,9 @@ defmodule Astarte.RealmManagementWeb.RealmConfigController do
   use Astarte.RealmManagementWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_read_realm_config", target: :realm] when action in [:show_auth, :show_device_registration_limit, :show_datastream_maximum_storage_retention]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_update_realm_config", target: :realm] when action in [:update_auth]
+
   alias Astarte.RealmManagement.RealmConfig
   alias Astarte.RealmManagement.RealmConfig.AuthConfig
   alias OpenApiSpex.{Reference, Schema}

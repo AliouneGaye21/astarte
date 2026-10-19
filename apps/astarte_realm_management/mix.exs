@@ -93,6 +93,7 @@ defmodule Astarte.RealmManagement.Mixfile do
       {:astarte_events, in_umbrella: true},
       {:astarte_rpc, in_umbrella: true},
       {:mimic, "~> 2.4", only: [:test, :dev]},
+      {:astarte_auth, in_umbrella: true},
       {:ssl_verify_fun, "~> 1.1.7"},
       {:uuid, "~> 2.0", hex: :uuid_erl},
       {:libcluster, "~> 3.3"},

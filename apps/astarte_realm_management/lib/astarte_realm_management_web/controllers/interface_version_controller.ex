@@ -20,6 +20,10 @@ defmodule Astarte.RealmManagementWeb.InterfaceVersionController do
   use Astarte.RealmManagementWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
+  plug Astarte.Auth.Plug.AuthorizeFGA,
+       [relation: "can_read", target: :interface, target_id_param: "interface_name"]
+       when action in [:index]
+
   alias Astarte.RealmManagement.Interfaces
   alias OpenApiSpex.Reference
 

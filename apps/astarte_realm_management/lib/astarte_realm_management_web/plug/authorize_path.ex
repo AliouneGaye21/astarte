@@ -18,22 +18,33 @@
 
 defmodule Astarte.RealmManagementWeb.Plug.AuthorizePath do
   @moduledoc """
-  A Plug to handle path-based authorization.
+  A Plug to handle authentication.
 
-  This plug checks the global configuration to determine if authentication is enabled and enforces authorization rules accordingly.
+  This plug checks the global configuration to determine if authentication is enabled and enforces authentication.
   """
   alias Astarte.RealmManagement.Config
-  alias Astarte.RealmManagementWeb.Plug.GuardianAuthorizePath
+  alias Astarte.RealmManagementWeb.AuthGuardian
+  alias Astarte.RealmManagementWeb.FallbackController
 
   def init(opts) do
-    GuardianAuthorizePath.init(opts)
+    opts
   end
 
-  def call(conn, opts) do
+  def call(conn, _opts) do
     if Config.authentication_disabled?() do
       conn
     else
-      GuardianAuthorizePath.call(conn, opts)
+      # We just ensure the user is authenticated. 
+      # The actual OpenFGA authorization will happen per-controller.
+      conn
+      |> Guardian.Plug.Pipeline.call(
+        otp_app: :astarte_realm_management,
+        module: AuthGuardian,
+        error_handler: FallbackController
+      )
+      |> Astarte.RealmManagementWeb.Plug.VerifyHeader.call([])
+      |> Guardian.Plug.EnsureAuthenticated.call([])
+      |> Guardian.Plug.LoadResource.call([])
     end
   end
 end
