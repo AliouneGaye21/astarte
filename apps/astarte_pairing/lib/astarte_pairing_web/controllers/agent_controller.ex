@@ -28,6 +28,9 @@ defmodule Astarte.PairingWeb.AgentController do
 
   action_fallback Astarte.PairingWeb.FallbackController
 
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_register_device", target: :realm] when action in [:create]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_unregister", target: :device, target_id_param: "device_id"] when action in [:delete]
+
   tags ["agent"]
   security [%{"JWT" => []}]
 

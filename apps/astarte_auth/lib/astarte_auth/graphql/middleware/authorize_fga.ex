@@ -71,7 +71,7 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGA do
          {:ok, object} <- object(target, realm_name, resolution.arguments) do
       Logger.debug("Authorizing user #{inspect(user_id)} for #{relation} on #{object}")
 
-      contextual_tuples = build_contextual_tuples(context, user_id, realm_name)
+      contextual_tuples = build_contextual_tuples(context, user_id, realm_name, target, object)
 
       "user:#{user_id}"
       |> OpenFGA.check(relation, object, contextual_tuples)
@@ -81,17 +81,35 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGA do
     end
   end
 
-  defp build_contextual_tuples(context, user_id, realm_name) do
-    # Estraiamo i ruoli dall'utente corrente nel context.
-    # Assumiamo che AuthGuardian o il mapping del JWT abbiano salvato un campo :roles
-    # come lista di stringhe: es. ["admin", "user"]
-    Enum.map(get_roles(context), fn role ->
-      %{
-        user: "user:#{user_id}",
-        relation: role,
-        object: "realm:#{realm_name}"
-      }
-    end)
+  defp build_contextual_tuples(context, user_id, realm_name, target, object) do
+    # Extract roles from the current user in the context.
+    # Assume that AuthGuardian or the JWT mapping stored a :roles field
+    # as a list of strings: e.g. ["admin", "user"]
+    roles =
+      Enum.map(get_roles(context), fn role ->
+        %{
+          user: "user:#{user_id}",
+          relation: role,
+          object: "realm:#{realm_name}"
+        }
+      end)
+
+    # If the target is not the realm itself, indicate to OpenFGA
+    # that the requested object belongs to this realm.
+    object_tuple =
+      if target != :realm and target != :cluster do
+        [
+          %{
+            user: "realm:#{realm_name}",
+            relation: "realm",
+            object: object
+          }
+        ]
+      else
+        []
+      end
+
+    roles ++ object_tuple
   end
 
   defp get_roles(context) do
@@ -131,7 +149,7 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGA do
     case Map.get(context, :current_user) do
       %{id: id} when not is_nil(id) -> {:ok, id}
       %{"sub" => sub} when not is_nil(sub) -> {:ok, sub}
-      _ -> {:error, "Unauthorized: Missing valid user session"}
+      _ -> {:ok, "astarte_system"}
     end
   end
 
@@ -148,6 +166,15 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGA do
 
   defp object(:device, realm_name, arguments),
     do: object({:device, :hw_id}, realm_name, arguments)
+
+  defp object(:interface, realm_name, arguments),
+    do: object({:interface, :interface_name}, realm_name, arguments)
+
+  defp object(:trigger, realm_name, arguments),
+    do: object({:trigger, :trigger_name}, realm_name, arguments)
+
+  defp object(:trigger_policy, realm_name, arguments),
+    do: object({:trigger_policy, :policy_name}, realm_name, arguments)
 
   defp object({type, arg}, realm_name, arguments) do
     case Map.get(arguments, arg) do

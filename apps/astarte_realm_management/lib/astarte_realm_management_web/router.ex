@@ -61,4 +61,22 @@ defmodule Astarte.RealmManagementWeb.Router do
   scope "/version", Astarte.RealmManagementWeb do
     get "/", VersionController, :show
   end
+
+  pipeline :graphql do
+    plug Astarte.Auth.GraphQL.Plug.Context,
+      otp_app: :astarte_realm_management,
+      guardian: Astarte.RealmManagementWeb.AuthGuardian,
+      verify_header: Astarte.RealmManagementWeb.Plug.VerifyHeader,
+      config: Astarte.RealmManagement.Config
+  end
+
+  scope "/v1" do
+    pipe_through [:graphql]
+
+    forward "/graphql", Absinthe.Plug, schema: Astarte.RealmManagementWeb.GraphQL.Schema
+
+    forward "/graphiql", Absinthe.Plug.GraphiQL,
+      schema: Astarte.RealmManagementWeb.GraphQL.Schema,
+      interface: :playground
+  end
 end

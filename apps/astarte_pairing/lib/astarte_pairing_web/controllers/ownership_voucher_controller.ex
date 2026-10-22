@@ -32,6 +32,9 @@ defmodule Astarte.PairingWeb.OwnershipVoucherController do
 
   action_fallback Astarte.PairingWeb.FallbackController
 
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_manage_fdo", target: :realm] when action in [:register, :delete_ownership_voucher, :run_to0]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_read_fdo", target: :realm] when action in [:list_ownership_vouchers, :owner_keys_for_voucher]
+
   # `action_fallback` renders from the conn as it entered the action, so this
   # has to be a plug for the error view to see the GUID
   plug :assign_fdo_guid when action in [:run_to0]
@@ -275,18 +278,7 @@ defmodule Astarte.PairingWeb.OwnershipVoucherController do
     end
   end
 
-  @doc """
-  Deletes an ownership voucher.
-  """
-  def delete(conn, %{"realm_name" => realm_name, "guid" => guid}) do
-    case Astarte.DataAccess.FDO.Queries.delete_ownership_voucher(realm_name, guid) do
-      {:ok, _} ->
-        send_resp(conn, 204, "")
 
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
 
   defp ensure_ownership_voucher_parameter(%{"ownership_voucher" => pem})
        when is_binary(pem) and pem != "",

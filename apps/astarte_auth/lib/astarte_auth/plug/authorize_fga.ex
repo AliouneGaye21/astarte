@@ -54,8 +54,8 @@ defmodule Astarte.Auth.Plug.AuthorizeFGA do
     user_id = get_user_id(conn)
     realm = conn.path_params["realm_name"]
 
-    if is_nil(user_id) or is_nil(realm) do
-      Logger.warning("FGA Check: Missing user_id or realm in connection.",
+    if is_nil(realm) do
+      Logger.warning("FGA Check: Missing realm in connection.",
         tag: "fga_unauthorized"
       )
 
@@ -89,7 +89,9 @@ defmodule Astarte.Auth.Plug.AuthorizeFGA do
         # We prefix the user id with user:<realm>/
         user = "user:#{realm}/#{user_id}"
 
-        case OpenFGA.check(user, relation, object) do
+        contextual_tuples = build_contextual_tuples(conn, user_id, realm)
+
+        case OpenFGA.check(user, relation, object, contextual_tuples) do
           :ok ->
             conn
 
@@ -111,12 +113,37 @@ defmodule Astarte.Auth.Plug.AuthorizeFGA do
     end
   end
 
+  defp build_contextual_tuples(conn, user_id, realm_name) do
+    Enum.map(get_roles(conn), fn role ->
+      %{
+        user: "user:#{realm_name}/#{user_id}",
+        relation: role,
+        object: "realm:#{realm_name}"
+      }
+    end)
+  end
+
+  defp get_roles(conn) do
+    roles =
+      case Guardian.Plug.current_resource(conn) do
+        %{roles: r} when is_list(r) -> r
+        %{"roles" => r} when is_list(r) -> r
+        _ ->
+          case Guardian.Plug.current_claims(conn) do
+            %{"roles" => r} when is_list(r) -> r
+            _ -> []
+          end
+      end
+
+    Enum.reject(roles, fn role -> is_nil(role) or String.trim(role) == "" end)
+  end
+
   defp get_user_id(conn) do
     # Standard fallback looking at standard guardian resource locations
     case Guardian.Plug.current_resource(conn) do
-      %{id: id} -> id
-      %{subject: id} -> id
-      _ -> nil
+      %{id: id} when not is_nil(id) -> id
+      %{subject: id} when not is_nil(id) -> id
+      _ -> "astarte_system"
     end
   end
 

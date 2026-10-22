@@ -47,9 +47,15 @@ defmodule Astarte.RealmManagementWeb.Plug.VerifyHeader do
   end
 
   defp fetch_secret(conn) do
-    with %{"realm_name" => realm} <- conn.path_params,
+    with realm when is_binary(realm) <- realm_name(conn),
          {:ok, public_key_pem} <- Auth.fetch_public_key(realm) do
       {:ok, JWK.from_pem(public_key_pem)}
+    else
+      _ -> {:error, :not_found}
     end
+  end
+
+  defp realm_name(conn) do
+    conn.assigns[:realm_name] || Map.get(conn.path_params, "realm_name")
   end
 end

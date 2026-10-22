@@ -19,17 +19,17 @@
 defmodule Astarte.PairingWeb.Plug.AuthorizePath do
   @moduledoc false
   alias Astarte.Pairing.Config
-  alias Astarte.PairingWeb.Plug.GuardianAuthorizePath
+  alias Astarte.PairingWeb.Plug.AuthPipeline
 
   def init(opts) do
-    GuardianAuthorizePath.init(opts)
+    AuthPipeline.init(opts)
   end
 
   def call(conn, opts) do
     if Config.authentication_disabled?() do
       conn
     else
-      GuardianAuthorizePath.call(conn, opts)
+      AuthPipeline.call(conn, opts)
     end
   end
 end

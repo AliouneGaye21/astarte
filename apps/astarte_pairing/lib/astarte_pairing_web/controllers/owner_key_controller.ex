@@ -30,6 +30,9 @@ defmodule Astarte.PairingWeb.OwnerKeyController do
 
   action_fallback Astarte.PairingWeb.FallbackController
 
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_manage_fdo", target: :realm] when action in [:create_or_upload_key]
+  plug Astarte.Auth.Plug.AuthorizeFGA, [relation: "can_read_fdo", target: :realm] when action in [:list_keys, :get_keys_for_algorithm, :get_key]
+
   tags ["fdo"]
 
   operation :create_or_upload_key,

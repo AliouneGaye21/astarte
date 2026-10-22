@@ -45,12 +45,19 @@ services:
       context: .
       args:
         SERVICE: astarte_realm_management
+    command: >
+      /bin/sh -c ". /shared/openfga.env && ./bin/astarte_realm_management start"
+    volumes:
+      - openfga-shared:/shared:ro,z
     env_file:
       - ./.env
     restart: on-failure
     environment:
       ASTARTE_EVENTS_PRODUCER_AMQP_HOST: "rabbitmq"
+      ASTARTE_OPENFGA_URL: "http://openfga:8080"
     depends_on:
+      openfga-init:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
       scylla:
