@@ -53,11 +53,7 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGA do
 
   @impl Absinthe.Middleware
   def call(resolution, opts) do
-    if authentication_disabled?(resolution.context) do
-      resolution
-    else
-      do_authorize(resolution, opts)
-    end
+    do_authorize(resolution, opts)
   end
 
   defp do_authorize(resolution, opts) do
@@ -66,8 +62,9 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGA do
     relation = Keyword.fetch!(opts, :relation)
     target = Keyword.fetch!(opts, :target)
 
+    realm_name = Map.get(context, :realm_name)
+
     with {:ok, user_id} <- user_id(context),
-         {:ok, realm_name} <- realm_name(context),
          {:ok, object} <- object(target, realm_name, resolution.arguments) do
       Logger.debug("Authorizing user #{inspect(user_id)} for #{relation} on #{object}")
 
@@ -86,27 +83,50 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGA do
     # Assume that AuthGuardian or the JWT mapping stored a :roles field
     # as a list of strings: e.g. ["admin", "user"]
     roles =
-      Enum.map(get_roles(context), fn role ->
-        %{
-          user: "user:#{user_id}",
-          relation: role,
-          object: "realm:#{realm_name}"
-        }
-      end)
-
-    # If the target is not the realm itself, indicate to OpenFGA
-    # that the requested object belongs to this realm.
-    object_tuple =
-      if target != :realm and target != :cluster do
-        [
+      if realm_name do
+        Enum.map(get_roles(context), fn role ->
           %{
-            user: "realm:#{realm_name}",
-            relation: "realm",
-            object: object
+            user: "user:#{user_id}",
+            relation: role,
+            object: "realm:#{realm_name}"
           }
-        ]
+        end)
       else
-        []
+        # If there is no realm_name in the context, this is a cluster-level request
+        # (e.g. Housekeeping). The roles in the token apply to the cluster.
+        Enum.map(get_roles(context), fn role ->
+          %{
+            user: "user:#{user_id}",
+            relation: role,
+            object: "cluster:astarte"
+          }
+        end)
+      end
+
+    object_tuple =
+      cond do
+        not is_nil(realm_name) and target != :realm and target != :cluster and not match?({:realm, _}, target) ->
+          # Indicate that the requested object belongs to this realm
+          [
+            %{
+              user: "realm:#{realm_name}",
+              relation: "realm",
+              object: object
+            }
+          ]
+
+        is_nil(realm_name) and match?({:realm, _}, target) ->
+          # Indicate that the requested realm belongs to the cluster
+          [
+            %{
+              user: "cluster:astarte",
+              relation: "parent",
+              object: object
+            }
+          ]
+
+        true ->
+          []
       end
 
     roles ++ object_tuple
@@ -136,12 +156,6 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGA do
   defp unauthorized(resolution, message),
     do: Absinthe.Resolution.put_result(resolution, {:error, message})
 
-  # The context is built by Astarte.Auth.GraphQL.Plug.Context, which only sets
-  # this once it has read the service's own configuration. A context without it
-  # is one we didn't build, so enforce authorization rather than skip it.
-  defp authentication_disabled?(context),
-    do: Map.get(context, :authentication_disabled?, false)
-
   # current_user is either the user struct Guardian loaded, or the raw JWT
   # claims if it didn't. Anything else is rejected instead of guessing an
   # identity.
@@ -149,20 +163,16 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGA do
     case Map.get(context, :current_user) do
       %{id: id} when not is_nil(id) -> {:ok, id}
       %{"sub" => sub} when not is_nil(sub) -> {:ok, sub}
-      _ -> {:ok, "astarte_system"}
+      _ -> {:error, "Unauthorized: Missing valid user session"}
     end
   end
 
   # Every Astarte GraphQL request is realm-scoped, so a request without a realm
-  # is rejected whatever its target object is.
-  defp realm_name(context) do
-    case Map.get(context, :realm_name) do
-      nil -> {:error, "Unauthorized: Missing realm context"}
-      realm_name -> {:ok, realm_name}
-    end
-  end
+  # is rejected whatever its target object is, unless it's a cluster-level operation.
+  defp object(:cluster, _realm_name, _arguments), do: {:ok, "cluster:astarte"}
 
-  defp object(:realm, realm_name, _arguments), do: {:ok, "realm:#{realm_name}"}
+  defp object(:realm, realm_name, _arguments) when not is_nil(realm_name), do: {:ok, "realm:#{realm_name}"}
+  defp object(:realm, nil, _arguments), do: {:error, "Unauthorized: Missing realm context"}
 
   defp object(:device, realm_name, arguments),
     do: object({:device, :hw_id}, realm_name, arguments)
@@ -184,7 +194,15 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGA do
         {:error, "Forbidden: OpenFGA denied access for this action"}
 
       id ->
-        {:ok, "#{type}:#{realm_name}/#{id}"}
+        if type == :realm do
+          {:ok, "realm:#{id}"}
+        else
+          if is_nil(realm_name) do
+            {:error, "Unauthorized: Missing realm context"}
+          else
+            {:ok, "#{type}:#{realm_name}/#{id}"}
+          end
+        end
     end
   end
 end

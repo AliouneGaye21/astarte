@@ -63,11 +63,14 @@ defmodule Astarte.RealmManagementWeb.Router do
   end
 
   pipeline :graphql do
-    plug Astarte.Auth.GraphQL.Plug.Context,
+    plug Guardian.Plug.Pipeline,
       otp_app: :astarte_realm_management,
-      guardian: Astarte.RealmManagementWeb.AuthGuardian,
-      verify_header: Astarte.RealmManagementWeb.Plug.VerifyHeader,
-      config: Astarte.RealmManagement.Config
+      module: Astarte.RealmManagementWeb.AuthGuardian,
+      error_handler: Astarte.Auth.GraphQL.Plug.Context.ErrorHandler
+
+    plug Astarte.RealmManagementWeb.Plug.VerifyHeader, halt: false
+    plug Guardian.Plug.LoadResource, allow_blank: true, halt: false
+    plug Astarte.Auth.GraphQL.Plug.Context
   end
 
   scope "/v1" do

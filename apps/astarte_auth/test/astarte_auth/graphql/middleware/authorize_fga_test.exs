@@ -101,7 +101,10 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGATest do
   end
 
   test "names the object from the hw_id argument for the :device target" do
-    expect(OpenFGA, :check, fn "user:user1", "editor", "device:my_device", [] -> :ok end)
+    expect(OpenFGA, :check, fn "user:user1", "editor", "device:testrealm/my_device",
+                               [%{user: "realm:testrealm", relation: "realm", object: "device:testrealm/my_device"}] ->
+      :ok
+    end)
 
     resolution =
       resolution(%{realm_name: "testrealm", current_user: %{id: "user1"}}, %{hw_id: "my_device"})
@@ -110,7 +113,10 @@ defmodule Astarte.Auth.GraphQL.Middleware.AuthorizeFGATest do
   end
 
   test "names the object from the given argument for a {type, arg} target" do
-    expect(OpenFGA, :check, fn "user:user1", "editor", "interface:com.Foo", [] -> :ok end)
+    expect(OpenFGA, :check, fn "user:user1", "editor", "interface:testrealm/com.Foo",
+                               [%{user: "realm:testrealm", relation: "realm", object: "interface:testrealm/com.Foo"}] ->
+      :ok
+    end)
 
     resolution =
       resolution(%{realm_name: "testrealm", current_user: %{id: "user1"}}, %{
