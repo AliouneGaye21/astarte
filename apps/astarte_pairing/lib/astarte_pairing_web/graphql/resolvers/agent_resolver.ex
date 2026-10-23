@@ -12,21 +12,11 @@ defmodule Astarte.PairingWeb.GraphQL.Resolvers.AgentResolver do
   """
   def register_device(_parent, args, %{context: context}) do
     realm = Map.fetch!(context, :realm_name)
-    params = %{"hw_id" => args.hw_id}
 
     params =
-      case Map.get(args, :initial_introspection) do
-        nil ->
-          params
-
-        entries ->
-          intro_map =
-            Map.new(entries, fn %{interface: i, major_version: major, minor_version: minor} ->
-              {i, %{"major" => major, "minor" => minor}}
-            end)
-
-          Map.put(params, "initial_introspection", intro_map)
-      end
+      args
+      |> Map.take([:hw_id, :initial_introspection])
+      |> Map.update(:initial_introspection, %{}, &introspection_map/1)
 
     case Agent.register_device(realm, params) do
       {:ok, %DeviceRegistrationResponse{} = response} ->
@@ -48,5 +38,16 @@ defmodule Astarte.PairingWeb.GraphQL.Resolvers.AgentResolver do
       :ok -> {:ok, "Device unregistered successfully"}
       {:error, reason} -> {:error, "Failed to unregister the device: #{inspect(reason)}"}
     end
+  end
+
+  # GraphQL has no maps with arbitrary keys, so the introspection comes in as a
+  # list of entries; DeviceRegistrationRequest takes the REST API's map shape.
+  # Absinthe has already checked each entry against :introspection_entry_input.
+  defp introspection_map(nil), do: %{}
+
+  defp introspection_map(entries) do
+    Map.new(entries, fn %{interface: interface, major_version: major, minor_version: minor} ->
+      {interface, %{"major" => major, "minor" => minor}}
+    end)
   end
 end

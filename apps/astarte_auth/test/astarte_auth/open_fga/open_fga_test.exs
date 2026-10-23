@@ -17,15 +17,12 @@
 #
 
 defmodule Astarte.Auth.OpenFGATest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   use Mimic
 
   alias Astarte.Auth.Config
   alias Astarte.Auth.OpenFGA
   alias Astarte.Auth.OpenFGA.Client
-
-  # Matches the :openfga_store_id configured in config/test.exs.
-  @store_id "test_store_id"
 
   defp respond(status, body) do
     fn _url, _body, _headers ->
@@ -47,7 +44,7 @@ defmodule Astarte.Auth.OpenFGATest do
 
   test "sends the configured store id, and the user/relation/object tuple" do
     expect(Client, :post, fn url, body, headers ->
-      assert url == "/stores/#{@store_id}/check"
+      assert url == "/stores/#{Config.openfga_store_id!()}/check"
       assert {"Content-Type", "application/json"} in headers
 
       assert Jason.decode!(body) == %{
@@ -62,15 +59,6 @@ defmodule Astarte.Auth.OpenFGATest do
     end)
 
     assert OpenFGA.check("user:42", "can_unregister", "device:abc123") == :ok
-  end
-
-  test "returns {:error, :store_not_configured} without calling OpenFGA when no store id is set" do
-    for unset <- [nil, ""] do
-      expect(Config, :openfga_store_id!, fn -> unset end)
-      reject(&Client.post/3)
-
-      assert OpenFGA.check("user:1", "viewer", "realm:test") == {:error, :store_not_configured}
-    end
   end
 
   test "returns {:error, :unexpected_response} when the body has no \"allowed\" key" do
@@ -97,5 +85,45 @@ defmodule Astarte.Auth.OpenFGATest do
     end)
 
     assert OpenFGA.check("user:1", "viewer", "realm:test") == {:error, :nxdomain}
+  end
+
+  describe "fetch_store_id/1" do
+    defp stores(stores) do
+      fn "/stores?name=astarte" ->
+        {:ok, %HTTPoison.Response{status_code: 200, body: Jason.encode!(%{"stores" => stores})}}
+      end
+    end
+
+    test "returns the id of the only store with that name" do
+      expect(Client, :get, stores([%{"id" => "01STORE", "name" => "astarte"}]))
+
+      assert OpenFGA.fetch_store_id("astarte") == {:ok, "01STORE"}
+    end
+
+    test "returns {:error, :not_found} when no store has that name" do
+      expect(Client, :get, stores([]))
+
+      assert OpenFGA.fetch_store_id("astarte") == {:error, :not_found}
+    end
+
+    test "returns {:error, :ambiguous} when several stores have that name" do
+      expect(Client, :get, stores([%{"id" => "01A"}, %{"id" => "01B"}]))
+
+      assert OpenFGA.fetch_store_id("astarte") == {:error, :ambiguous}
+    end
+
+    test "returns {:error, {:unexpected_status, status}} on a non-200 response" do
+      expect(Client, :get, fn _url ->
+        {:ok, %HTTPoison.Response{status_code: 500, body: "internal error"}}
+      end)
+
+      assert OpenFGA.fetch_store_id("astarte") == {:error, {:unexpected_status, 500}}
+    end
+
+    test "returns {:error, reason} when the request itself fails" do
+      expect(Client, :get, fn _url -> {:error, %HTTPoison.Error{reason: :econnrefused}} end)
+
+      assert OpenFGA.fetch_store_id("astarte") == {:error, :econnrefused}
+    end
   end
 end

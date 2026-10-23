@@ -50,6 +50,8 @@ jobs:
           path: ${{ runner.temp }}
       - name: Load astarte images
         run: ls ${{ runner.temp }}/*.tar | xargs --max-args 1 docker load --input
+      - name: Build openfga-init
+        run: docker compose build openfga-init
       - name: Start all Astarte services
         run: docker compose up --no-build --pull missing -d
       - name: Wait for Astarte to come up
@@ -135,6 +137,9 @@ jobs:
       - name: Initialize keys
         working-directory: .tmp/repos/astarte
         run: astartectl utils gen-keypair test
+      - name: Build openfga-init
+        working-directory: .tmp/repos/astarte
+        run: docker compose build openfga-init
       - name: Start all Astarte services
         working-directory: .tmp/repos/astarte
         run: docker compose up --no-build --pull missing -d
@@ -200,6 +205,8 @@ jobs:
           path: ${{ runner.temp }}
       - name: Load astarte images
         run: ls ${{ runner.temp }}/*.tar | xargs --max-args 1 docker load --input
+      - name: Build openfga-init
+        run: docker compose build openfga-init
       - name: Start all Astarte services
         run: docker compose up --no-build --pull missing -d
       - name: Install astartectl
