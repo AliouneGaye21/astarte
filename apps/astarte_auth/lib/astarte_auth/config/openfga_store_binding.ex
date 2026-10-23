@@ -16,13 +16,23 @@
 # limitations under the License.
 #
 
-defmodule Astarte.Auth.TestConfig do
+defmodule Astarte.Auth.Config.OpenFGAStoreBinding do
   @moduledoc """
-  Stands in for a service's own `Config` module when testing
-  `Astarte.Auth.GraphQL.Plug.Context`.
+  Skogsra binding resolving the OpenFGA store id from the configured store
+  name, used when `ASTARTE_OPENFGA_STORE_ID` is unset.
   """
 
-  def authentication_disabled? do
-    Application.get_env(:astarte_auth, :test_disable_authentication, false)
+  use Skogsra.Binding
+
+  alias Astarte.Auth.Config
+  alias Astarte.Auth.OpenFGA
+
+  @impl Skogsra.Binding
+  def get_env(_env, _config) do
+    case Config.openfga_store_name() do
+      {:ok, store_name} when store_name not in [nil, ""] -> OpenFGA.fetch_store_id(store_name)
+      {:ok, _unset} -> {:ok, nil}
+      {:error, reason} -> {:error, reason}
+    end
   end
 end

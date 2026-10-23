@@ -86,6 +86,30 @@ defmodule Astarte.PairingWeb.FallbackController do
     |> render(:unprocessable_key)
   end
 
+  # The key algorithm is not one the secrets store supports
+  def call(conn, {:error, :invalid_key_algorithm}) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> put_view(Astarte.PairingWeb.ErrorView)
+    |> render(:unprocessable_key)
+  end
+
+  # The ownership voucher could not be decoded
+  def call(conn, {:error, :invalid_ownership_voucher}) do
+    conn
+    |> put_status(:unprocessable_entity)
+    |> put_view(Astarte.PairingWeb.ErrorView)
+    |> render(:"422")
+  end
+
+  # The secrets store could not list the owner keys
+  def call(conn, {:error, :owner_keys_unavailable}) do
+    conn
+    |> put_status(:internal_server_error)
+    |> put_view(Astarte.PairingWeb.ErrorView)
+    |> render(:"500")
+  end
+
   # A key with the same name has already been imported in OpenBao
   def call(conn, {:error, :key_already_imported}) do
     conn
