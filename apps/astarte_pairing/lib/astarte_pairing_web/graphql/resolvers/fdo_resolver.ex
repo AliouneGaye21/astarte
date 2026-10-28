@@ -24,28 +24,32 @@ defmodule Astarte.PairingWeb.GraphQL.Resolvers.FdoResolver do
 
   alias Astarte.FDO.OwnershipVoucher
   alias Astarte.Pairing.FDO
+  alias Astarte.Pairing.FDO.OwnerKey
   alias Astarte.PairingWeb.ChangesetView
   alias Astarte.PairingWeb.OwnershipVoucherView
-  alias Astarte.Secrets
   alias Astarte.Secrets.OwnerKeyInitialization
   alias Astarte.Secrets.OwnerKeyInitializationOptions
 
-  def list_owner_keys(_parent, %{key_algorithm: alg}, %{context: %{realm_name: realm}}) do
-    with {:ok, algorithm_atom} <- Secrets.Core.string_to_key_type(alg) do
-      Secrets.Core.get_keys(realm, [algorithm_atom])
-    end
+  def list_owner_keys(_parent, %{key_algorithm: alg}, %{context: %{realm_name: realm}})
+      when is_binary(alg) do
+    realm
+    |> OwnerKey.list(alg)
+    |> owner_keys_result()
   end
 
   def list_owner_keys(_parent, _args, %{context: %{realm_name: realm}}) do
-    Secrets.Core.get_keys(realm, Secrets.Core.asymmetric_key_algorithms())
+    realm
+    |> OwnerKey.list()
+    |> owner_keys_result()
   end
 
   def get_owner_key(_parent, %{key_algorithm: alg, key_name: key_name}, %{
         context: %{realm_name: realm}
       }) do
-    with {:ok, algorithm_atom} <- key_type(alg),
-         {:ok, key} <- owner_key(realm, key_name, algorithm_atom) do
-      {:ok, %{key_name: key.name, public_key: key.public_pem}}
+    case OwnerKey.fetch(realm, alg, key_name) do
+      {:ok, key} -> {:ok, %{key_name: key.name, public_key: key.public_pem}}
+      :error -> {:error, "Invalid key algorithm"}
+      :not_found -> {:error, "Key not found"}
     end
   end
 
@@ -57,22 +61,6 @@ defmodule Astarte.PairingWeb.GraphQL.Resolvers.FdoResolver do
     end
   end
 
-  # Turns :error into its own message, so get_owner_key/3's with doesn't
-  # need an else to tell it apart from find_key/3's :not_found.
-  defp key_type(alg) do
-    case Secrets.Core.string_to_key_type(alg) do
-      {:ok, algorithm_atom} -> {:ok, algorithm_atom}
-      :error -> {:error, "Invalid key algorithm"}
-    end
-  end
-
-  defp owner_key(realm, key_name, algorithm_atom) do
-    case Secrets.Core.find_key(realm, key_name, algorithm_atom) do
-      {:ok, key} -> {:ok, key}
-      :not_found -> {:error, "Key not found"}
-    end
-  end
-
   defp validate_owner_key_options(changeset) do
     case Ecto.Changeset.apply_action(changeset, :insert) do
       {:ok, validated_options} -> {:ok, validated_options}
@@ -81,11 +69,15 @@ defmodule Astarte.PairingWeb.GraphQL.Resolvers.FdoResolver do
   end
 
   def owner_keys_for_voucher(_parent, %{ownership_voucher: pem}, %{context: %{realm_name: realm}}) do
-    with {:ok, voucher} <- OwnershipVoucher.decode_binary_voucher(pem) do
-      key_algorithm = OwnershipVoucher.key_algorithm(voucher)
-      Secrets.Core.get_keys(realm, key_algorithm)
-    end
+    realm
+    |> FDO.OwnershipVoucher.compatible_owner_keys(pem)
+    |> owner_keys_result()
   end
+
+  # The secrets store reports some failures as a bare :error, which Absinthe
+  # can't render.
+  defp owner_keys_result(:error), do: {:error, "Failed to list the owner keys"}
+  defp owner_keys_result(result), do: result
 
   def list_ownership_vouchers(_parent, _args, %{context: %{realm_name: realm}}) do
     with {:ok, vouchers} <- OwnershipVoucher.list(realm) do

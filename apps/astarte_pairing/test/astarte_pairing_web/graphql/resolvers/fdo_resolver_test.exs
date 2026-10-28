@@ -71,6 +71,11 @@ defmodule Astarte.PairingWeb.GraphQL.Resolvers.FdoResolverTest do
                {:ok, context.expected_owner_keys}
     end
 
+    test "lists every algorithm when the key algorithm is null", context do
+      assert FdoResolver.list_owner_keys(nil, %{key_algorithm: nil}, context.resolution) ==
+               {:ok, context.expected_owner_keys}
+    end
+
     test "lists only the keys of the requested algorithm", context do
       assert FdoResolver.list_owner_keys(nil, %{key_algorithm: "ecdsa-p256"}, context.resolution) ==
                {:ok, Map.take(context.expected_owner_keys, [:es256])}

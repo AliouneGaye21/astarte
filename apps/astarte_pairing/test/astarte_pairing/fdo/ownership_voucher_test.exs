@@ -18,7 +18,8 @@
 
 defmodule Astarte.Pairing.FDO.OwnershipVoucherTest do
   # The REST controller tests cover registration end to end; these cover what
-  # they can't reach: the failures after the voucher was claimed.
+  # they can't reach: the failures after the voucher was claimed, and the
+  # owner keys compatible with a voucher.
   #
   # Not async: the REST controller tests register the same voucher, and a
   # voucher GUID can only be stored once.
@@ -96,4 +97,15 @@ defmodule Astarte.Pairing.FDO.OwnershipVoucherTest do
     end
   end
 
+  describe "compatible_owner_keys/2" do
+    test "lists the owner keys of the voucher's key algorithm", %{realm_name: realm} do
+      assert FDO.OwnershipVoucher.compatible_owner_keys(realm, registrable_voucher_pem()) ==
+               {:ok, %{es256: [@key_name]}}
+    end
+
+    test "returns an error for a malformed voucher", %{realm_name: realm} do
+      assert {:error, _reason} =
+               FDO.OwnershipVoucher.compatible_owner_keys(realm, "not a voucher")
+    end
+  end
 end

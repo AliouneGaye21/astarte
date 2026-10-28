@@ -25,6 +25,7 @@ defmodule Astarte.Pairing.FDO.OwnershipVoucher do
   alias Astarte.FDO.OwnershipVoucher
   alias Astarte.FDO.OwnershipVoucher.LoadRequest
   alias Astarte.Pairing.Engine
+  alias Astarte.Secrets
 
   require Logger
 
@@ -40,6 +41,17 @@ defmodule Astarte.Pairing.FDO.OwnershipVoucher do
          :ok <- store_voucher(realm_name, req, expiry),
          :ok <- register_device(realm_name, req) do
       {:ok, %{public_key: req.extracted_owner_key.public_pem, guid: req.device_guid}}
+    end
+  end
+
+  @doc """
+  Lists the realm's owner keys whose algorithm fits the voucher, as key names
+  grouped by key algorithm.
+  """
+  @spec compatible_owner_keys(String.t(), String.t()) :: {:ok, map()} | term()
+  def compatible_owner_keys(realm_name, voucher_pem) do
+    with {:ok, voucher} <- OwnershipVoucher.decode_binary_voucher(voucher_pem) do
+      Secrets.Core.get_keys(realm_name, OwnershipVoucher.key_algorithm(voucher))
     end
   end
 

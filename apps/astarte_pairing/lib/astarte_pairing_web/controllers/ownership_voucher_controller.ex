@@ -25,7 +25,6 @@ defmodule Astarte.PairingWeb.OwnershipVoucherController do
   alias Astarte.PairingWeb.ApiSpec.Schemas.Errors
   alias Astarte.PairingWeb.ApiSpec.Schemas.OwnershipVoucher, as: OVApiSpec
   alias Astarte.PairingWeb.OwnershipVoucherView
-  alias Astarte.Secrets.Core, as: SecretsCore
   alias OpenApiSpex.MediaType
   alias OpenApiSpex.Response
   alias OpenApiSpex.Schema
@@ -268,9 +267,7 @@ defmodule Astarte.PairingWeb.OwnershipVoucherController do
   """
   def owner_keys_for_voucher(conn, %{"data" => data, "realm_name" => realm_name}) do
     with {:ok, pem} <- ensure_ownership_voucher_parameter(data),
-         {:ok, voucher} <- OwnershipVoucher.decode_binary_voucher(pem),
-         key_algorithm = OwnershipVoucher.key_algorithm(voucher),
-         {:ok, keys_map} <- SecretsCore.get_keys(realm_name, key_algorithm) do
+         {:ok, keys_map} <- FDO.OwnershipVoucher.compatible_owner_keys(realm_name, pem) do
       json(conn, %{data: keys_map})
     end
   end
