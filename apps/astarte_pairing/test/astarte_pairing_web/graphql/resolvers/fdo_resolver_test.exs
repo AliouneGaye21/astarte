@@ -17,55 +17,22 @@
 #
 
 defmodule Astarte.PairingWeb.GraphQL.Resolvers.FdoResolverTest do
-  use ExUnit.Case, async: true
+  use Astarte.Pairing.Cases.Data, async: true
+  use Astarte.Pairing.Cases.OwnerKeys
   use Mimic
 
-  alias Astarte.FDO.OwnershipVoucher
-  alias Astarte.Pairing.FDO
+  import Astarte.Pairing.Helpers.FDO
+
+  alias Astarte.Core.Device
+  alias Astarte.DataAccess.Device, as: DeviceQueries
   alias Astarte.PairingWeb.GraphQL.Resolvers.FdoResolver
+  alias Astarte.RPC.RealmManagement
   alias Astarte.Secrets
   alias Astarte.Secrets.Key
 
-  @context %{context: %{realm_name: "testrealm"}}
-
-  # Owner keys live in OpenBao only, namespaced by realm, so each test gets a
-  # realm of its own and the module can stay async.
-  defp owner_keys(_context) do
-    realm = "fdoresolver#{System.unique_integer([:positive])}"
-    {:ok, es256} = Secrets.create_fdo_namespace(realm, :es256)
-    {:ok, es384} = Secrets.create_fdo_namespace(realm, :es384)
-
-    {:ok, _} = Secrets.create_keypair("owner_key_a", :es256, namespace: es256)
-    {:ok, _} = Secrets.create_keypair("owner_key_b", :es256, namespace: es256)
-    {:ok, _} = Secrets.create_keypair("owner_key_c", :es384, namespace: es384)
-
-    on_exit(fn -> Enum.each([es256, es384], &delete_keys/1) end)
-
-    %{
-      resolution: %{context: %{realm_name: realm}},
-      realm: realm,
-      namespace: es256,
-      expected_owner_keys: %{
-        es256: ["owner_key_a", "owner_key_b"],
-        es384: ["owner_key_c"],
-        rs256: [],
-        rs384: []
-      }
-    }
-  end
-
-  defp delete_keys(namespace) do
-    {:ok, key_names} = Secrets.list_keys_names(namespace: namespace)
-
-    Enum.each(key_names, fn key_name ->
-      Secrets.enable_key_deletion(key_name, namespace: namespace)
-      Secrets.delete_key(key_name, namespace: namespace)
-    end)
-  end
+  @voucher_key_name "voucher_owner_key"
 
   describe "list_owner_keys/3" do
-    setup :owner_keys
-
     test "lists the realm's keys for every algorithm", context do
       assert FdoResolver.list_owner_keys(nil, %{}, context.resolution) ==
                {:ok, context.expected_owner_keys}
@@ -83,8 +50,6 @@ defmodule Astarte.PairingWeb.GraphQL.Resolvers.FdoResolverTest do
   end
 
   describe "get_owner_key/3" do
-    setup :owner_keys
-
     test "returns the key's public PEM", context do
       {:ok, %Key{public_pem: public_pem}} =
         Secrets.get_key("owner_key_a", namespace: context.namespace)
@@ -99,105 +64,156 @@ defmodule Astarte.PairingWeb.GraphQL.Resolvers.FdoResolverTest do
       args = %{key_algorithm: "bogus", key_name: "owner_key_a"}
 
       assert FdoResolver.get_owner_key(nil, args, context.resolution) ==
-               {:error, "Invalid key algorithm"}
+               {:error, :invalid_key_algorithm}
     end
 
     test "returns an error when the key doesn't exist", context do
       args = %{key_algorithm: "ecdsa-p256", key_name: "missing"}
 
-      assert FdoResolver.get_owner_key(nil, args, context.resolution) == {:error, "Key not found"}
+      assert FdoResolver.get_owner_key(nil, args, context.resolution) ==
+               {:error, :key_not_found}
     end
   end
 
   describe "create_or_upload_owner_key/3" do
-    setup :owner_keys
+    # The realm's keys are shared by the whole module, so each test works on a
+    # key of its own and deletes just that one, if it was created.
+    setup %{namespace: namespace} do
+      key_name = "new_key_#{System.unique_integer([:positive])}"
+
+      on_exit(fn ->
+        with {:ok, _key} <- Secrets.get_key(key_name, namespace: namespace) do
+          delete_owner_key(key_name, namespace)
+        end
+      end)
+
+      %{key_name: key_name}
+    end
 
     test "creates the key and returns its public PEM", context do
-      args = %{action: "create", key_name: "new_key", key_algorithm: "ecdsa-p256"}
+      args = %{action: "create", key_name: context.key_name, key_algorithm: "ecdsa-p256"}
 
       assert {:ok, public_pem} =
                FdoResolver.create_or_upload_owner_key(nil, args, context.resolution)
 
       assert {:ok, %Key{public_pem: ^public_pem}} =
-               Secrets.get_key("new_key", namespace: context.namespace)
+               Secrets.get_key(context.key_name, namespace: context.namespace)
     end
 
     test "returns the validation error and creates nothing when options are invalid", context do
-      # :key_name is required and missing.
-      args = %{action: "create", key_algorithm: "ecdsa-p256"}
+      # Creating a key requires :key_algorithm.
+      args = %{action: "create", key_name: context.key_name}
 
-      assert {:error, "Validation failed: " <> _} =
+      assert {:error, %Ecto.Changeset{}} =
                FdoResolver.create_or_upload_owner_key(nil, args, context.resolution)
 
-      assert {:ok, ["owner_key_a", "owner_key_b"]} =
-               Secrets.list_keys_names(namespace: context.namespace)
+      refute match?({:ok, _}, Secrets.get_key(context.key_name, namespace: context.namespace))
+    end
+  end
+
+  describe "list_ownership_vouchers/3" do
+    test "returns no vouchers for a realm without any", context do
+      assert FdoResolver.list_ownership_vouchers(nil, %{}, context.resolution) == {:ok, []}
     end
   end
 
   describe "register_ownership_voucher/3" do
-    @args %{
-      ownership_voucher: "voucher-pem",
-      key_name: "mykey",
-      key_algorithm: "ecdsa-p256"
-    }
+    setup :setup_registrable_voucher
 
-    test "returns the public key and guid on success" do
-      raw_guid = UUID.uuid4(:raw)
+    test "registers the voucher and returns the owner's public key and the GUID", context do
+      %{args: args, owner_public_pem: owner_public_pem, resolution: resolution} = context
 
-      expect(FDO.OwnershipVoucher, :register, fn _params, "testrealm" ->
-        {:ok, %{public_key: "PEM", guid: raw_guid}}
-      end)
+      assert FdoResolver.register_ownership_voucher(nil, args, resolution) ==
+               {:ok, %{public_key: owner_public_pem, guid: registrable_voucher_guid()}}
 
-      assert FdoResolver.register_ownership_voucher(nil, @args, @context) ==
-               {:ok, %{public_key: "PEM", guid: UUID.binary_to_string!(raw_guid)}}
+      assert {:ok, [%{guid: guid}]} = FdoResolver.list_ownership_vouchers(nil, %{}, resolution)
+      assert guid == registrable_voucher_guid()
     end
 
-    test "formats a changeset error" do
-      changeset =
-        %Astarte.FDO.OwnershipVoucher.LoadRequest{}
-        |> Ecto.Changeset.change()
-        |> Ecto.Changeset.add_error(:key_name, "does not exist in secrets store")
+    test "registers the voucher's device with its initial introspection", context do
+      %{args: args, device_id: device_id, realm: realm, resolution: resolution} = context
 
-      expect(FDO.OwnershipVoucher, :register, fn _params, "testrealm" ->
-        {:error, changeset}
-      end)
+      introspection = [
+        %{interface: "org.astarteplatform.Values", major_version: 0, minor_version: 4},
+        %{interface: "org.astarteplatform.OtherValues", major_version: 1, minor_version: 0}
+      ]
 
-      assert {:error, "Validation failed: " <> _} =
-               FdoResolver.register_ownership_voucher(nil, @args, @context)
+      args = Map.put(args, :initial_introspection, introspection)
+      {:ok, _response} = FdoResolver.register_ownership_voucher(nil, args, resolution)
+
+      assert {:ok, device} = DeviceQueries.fetch(realm, device_id)
+
+      assert device.introspection == %{
+               "org.astarteplatform.Values" => 0,
+               "org.astarteplatform.OtherValues" => 1
+             }
+
+      assert device.introspection_minor == %{
+               "org.astarteplatform.Values" => 4,
+               "org.astarteplatform.OtherValues" => 0
+             }
     end
 
-    test "passes through a non-changeset error unchanged" do
-      expect(FDO.OwnershipVoucher, :register, fn _params, "testrealm" ->
-        {:error, :timeout}
-      end)
+    test "returns the validation error when the owner key doesn't exist", context do
+      args = %{context.args | key_name: "missing"}
 
-      assert FdoResolver.register_ownership_voucher(nil, @args, @context) == {:error, :timeout}
+      assert {:error, %Ecto.Changeset{}} =
+               FdoResolver.register_ownership_voucher(nil, args, context.resolution)
     end
   end
 
   describe "delete_ownership_voucher/3" do
-    @guid "2b0e0b8f-5c55-4ffb-8a4f-0c3a1e6d7f21"
+    setup :setup_registrable_voucher
 
-    test "deletes the voucher by its binary GUID and returns the GUID it was given" do
-      binary_guid = UUID.string_to_binary!(@guid)
+    test "deletes the voucher and returns its GUID", context do
+      %{args: args, realm: realm, resolution: resolution} = context
+      guid = registrable_voucher_guid()
+      {:ok, _response} = FdoResolver.register_ownership_voucher(nil, args, resolution)
 
-      expect(OwnershipVoucher, :delete, fn "testrealm", ^binary_guid -> :ok end)
+      # The voucher's device is deleted by Realm Management, which doesn't run
+      # in these tests.
+      hw_id = args.hw_id
+      expect(RealmManagement, :delete_device, fn ^realm, ^hw_id -> :ok end)
 
-      assert FdoResolver.delete_ownership_voucher(nil, %{guid: @guid}, @context) == {:ok, @guid}
+      assert FdoResolver.delete_ownership_voucher(nil, %{guid: guid}, resolution) == {:ok, guid}
+      assert FdoResolver.list_ownership_vouchers(nil, %{}, resolution) == {:ok, []}
     end
 
-    test "reports a GUID that isn't a UUID as not found, without deleting anything" do
-      reject(&OwnershipVoucher.delete/2)
-
-      assert FdoResolver.delete_ownership_voucher(nil, %{guid: "not-a-guid"}, @context) ==
-               {:error, "Failed to delete voucher: :not_found"}
+    test "reports a GUID that isn't a UUID as not found", context do
+      assert FdoResolver.delete_ownership_voucher(nil, %{guid: "not-a-guid"}, context.resolution) ==
+               {:error, :not_found}
     end
 
-    test "reports why the deletion failed" do
-      expect(OwnershipVoucher, :delete, fn _realm, _guid -> {:error, :not_found} end)
-
-      assert FdoResolver.delete_ownership_voucher(nil, %{guid: @guid}, @context) ==
-               {:error, "Failed to delete voucher: :not_found"}
+    test "reports an unknown GUID as not found", context do
+      assert FdoResolver.delete_ownership_voucher(nil, %{guid: UUID.uuid4()}, context.resolution) ==
+               {:error, :not_found}
     end
+  end
+
+  # Registering a voucher claims it on the rendezvous server and registers its
+  # device, so this imports the key the voucher was issued for and removes the
+  # voucher and the device afterwards.
+  defp setup_registrable_voucher(context) do
+    %{realm: realm, astarte_instance_id: astarte_instance_id, namespace: namespace} = context
+
+    {:ok, owner_key} = COSE.Keys.from_pem(registrable_voucher_owner_key_pem())
+    :ok = Secrets.import_key(@voucher_key_name, :es256, owner_key, namespace: namespace)
+
+    {:ok, %Key{public_pem: owner_public_pem}} =
+      Secrets.get_key(@voucher_key_name, namespace: namespace)
+
+    on_exit(fn -> delete_owner_key(@voucher_key_name, namespace) end)
+
+    device_id = Device.random_device_id()
+    cleanup_registrable_voucher_on_exit(astarte_instance_id, realm, device_id)
+
+    args = %{
+      hw_id: Device.encode_device_id(device_id),
+      ownership_voucher: registrable_voucher_pem(),
+      key_name: @voucher_key_name,
+      key_algorithm: "ecdsa-p256"
+    }
+
+    %{args: args, device_id: device_id, owner_public_pem: owner_public_pem}
   end
 end

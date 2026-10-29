@@ -195,10 +195,15 @@ defmodule Astarte.Pairing.Helpers.FDO do
   def delete_owner_keys(namespace) do
     {:ok, key_names} = Secrets.list_keys_names(namespace: namespace)
 
-    Enum.each(key_names, fn key_name ->
-      Secrets.enable_key_deletion(key_name, namespace: namespace)
-      Secrets.delete_key(key_name, namespace: namespace)
-    end)
+    Enum.each(key_names, &delete_owner_key(&1, namespace))
+  end
+
+  @doc """
+  Deletes one owner key from a secrets store namespace.
+  """
+  def delete_owner_key(key_name, namespace) do
+    Secrets.enable_key_deletion(key_name, namespace: namespace)
+    Secrets.delete_key(key_name, namespace: namespace)
   end
 
   @doc """

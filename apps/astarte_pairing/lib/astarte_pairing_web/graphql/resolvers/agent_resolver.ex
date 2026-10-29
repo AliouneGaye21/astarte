@@ -23,7 +23,7 @@ defmodule Astarte.PairingWeb.GraphQL.Resolvers.AgentResolver do
         {:ok, %{credentials_secret: response.credentials_secret}}
 
       {:error, reason} ->
-        {:error, "Failed to register the device: #{inspect(reason)}"}
+        {:error, reason}
     end
   end
 
@@ -36,7 +36,7 @@ defmodule Astarte.PairingWeb.GraphQL.Resolvers.AgentResolver do
 
     case Agent.unregister_device(realm, hw_id) do
       :ok -> {:ok, "Device unregistered successfully"}
-      {:error, reason} -> {:error, "Failed to unregister the device: #{inspect(reason)}"}
+      {:error, reason} -> {:error, reason}
     end
   end
 

@@ -20,6 +20,8 @@ defmodule Astarte.RealmManagementWeb.TriggerPolicyController do
   use Astarte.RealmManagementWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
+
+
   alias Astarte.Core.Triggers.Policy
   alias Astarte.RealmManagement.Triggers.Policies
   alias OpenApiSpex.{Reference, Schema}

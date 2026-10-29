@@ -50,7 +50,10 @@ services:
     restart: on-failure
     environment:
       ASTARTE_EVENTS_PRODUCER_AMQP_HOST: "rabbitmq"
+      ASTARTE_OPENFGA_URL: "http://openfga:8080"
     depends_on:
+      openfga-init:
+        condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
       scylla:
@@ -334,6 +337,7 @@ services:
     volumes:
       - ./compose/openfga-init:/openfga-init:ro,z
       - ./apps/astarte_auth/priv/authorization_model.fga:/model/authorization_model.fga:ro,z
+      - openfga-shared:/shared:z
     command: /openfga-init/init.sh
 
   # RabbitMQ
@@ -418,6 +422,7 @@ volumes:
   vernemq-data:
   cfssl-data:
   fdo-rendezvous-data:
+  openfga-shared:
 
 networks:
   default:

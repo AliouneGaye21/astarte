@@ -9,9 +9,19 @@ defmodule Astarte.PairingWeb.GraphQL.Schema do
   import_types Astarte.PairingWeb.GraphQL.Types.{DeviceTypes, AgentTypes, FdoTypes}
 
   alias Astarte.Auth.GraphQL.Middleware.AuthorizeFGA
+  alias Astarte.PairingWeb.GraphQL.Middleware.HandleErrors
   alias Astarte.PairingWeb.GraphQL.Resolvers.AgentResolver
   alias Astarte.PairingWeb.GraphQL.Resolvers.DeviceResolver
   alias Astarte.PairingWeb.GraphQL.Resolvers.FdoResolver
+
+  # Every query and mutation leaves turning its errors into GraphQL errors to
+  # HandleErrors, like the REST controllers leave it to their fallback.
+  @impl Absinthe.Schema
+  def middleware(middleware, _field, %{identifier: identifier})
+      when identifier in [:query, :mutation],
+      do: middleware ++ [HandleErrors]
+
+  def middleware(middleware, _field, _object), do: middleware
 
   query do
     @desc "Retrieves a device by its hardware ID. Requires the device's own credentials secret, not an Agent JWT, so it is not covered by the AuthorizeFGA middleware."
@@ -109,6 +119,12 @@ defmodule Astarte.PairingWeb.GraphQL.Schema do
 
     @desc "Register a device ownership voucher"
     field :register_ownership_voucher, :register_ownership_voucher_response do
+      arg :hw_id, non_null(:string),
+        description: "The Device ID to register the voucher's device as"
+
+      @desc "Optional initial introspection for the voucher's device"
+      arg :initial_introspection, list_of(non_null(:introspection_entry_input))
+
       arg :ownership_voucher, non_null(:string)
       arg :key_name, non_null(:string)
       arg :key_algorithm, non_null(:key_algorithm)

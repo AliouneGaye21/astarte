@@ -74,7 +74,7 @@ defmodule Astarte.PairingWeb.GraphQL.Resolvers.AgentResolverTest do
       end)
 
       assert AgentResolver.register_device(nil, %{hw_id: @hw_id}, @context) ==
-               {:error, "Failed to register the device: :device_already_registered"}
+               {:error, :device_already_registered}
     end
   end
 end

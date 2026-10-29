@@ -25,7 +25,7 @@ defmodule Astarte.Pairing.FDO.OwnershipVoucher do
   alias Astarte.FDO.OwnershipVoucher
   alias Astarte.FDO.OwnershipVoucher.LoadRequest
   alias Astarte.Pairing.Engine
-  alias Astarte.Secrets
+  alias Astarte.Pairing.FDO.OwnerKey
 
   require Logger
 
@@ -45,13 +45,56 @@ defmodule Astarte.Pairing.FDO.OwnershipVoucher do
   end
 
   @doc """
+  Lists the realm's ownership vouchers.
+  """
+  defdelegate list(realm_name), to: OwnershipVoucher
+
+  @doc """
+  Deletes the ownership voucher with the given GUID, in its string form,
+  revoking its registration on the rendezvous server first.
+  """
+  @spec delete(String.t(), String.t()) :: :ok | {:error, term()}
+  def delete(realm_name, guid) do
+    with {:ok, binary_guid} <- dump_guid(guid) do
+      OwnershipVoucher.delete(realm_name, binary_guid)
+    end
+  end
+
+  @doc """
+  Registers the ownership voucher with the given GUID, in its string form, on
+  the rendezvous server again, returning its new expiry.
+  """
+  @spec run_to0(String.t(), String.t()) :: {:ok, DateTime.t()} | {:error, term()}
+  def run_to0(realm_name, guid) do
+    with {:ok, binary_guid} <- dump_guid(guid) do
+      OwnershipVoucher.run_to0(realm_name, binary_guid)
+    end
+  end
+
+  @doc """
   Lists the realm's owner keys whose algorithm fits the voucher, as key names
   grouped by key algorithm.
   """
-  @spec compatible_owner_keys(String.t(), String.t()) :: {:ok, map()} | term()
+  @spec compatible_owner_keys(String.t(), String.t()) ::
+          {:ok, map()} | {:error, :invalid_ownership_voucher | :owner_keys_unavailable}
   def compatible_owner_keys(realm_name, voucher_pem) do
-    with {:ok, voucher} <- OwnershipVoucher.decode_binary_voucher(voucher_pem) do
-      Secrets.Core.get_keys(realm_name, OwnershipVoucher.key_algorithm(voucher))
+    with {:ok, voucher} <- decode_voucher(voucher_pem) do
+      OwnerKey.list_for_key_types(realm_name, OwnershipVoucher.key_algorithm(voucher))
+    end
+  end
+
+  # Vouchers are stored by their binary GUID, while clients see its string form.
+  defp dump_guid(guid) do
+    case Ecto.UUID.dump(guid) do
+      {:ok, binary_guid} -> {:ok, binary_guid}
+      :error -> {:error, :not_found}
+    end
+  end
+
+  defp decode_voucher(voucher_pem) do
+    case OwnershipVoucher.decode_binary_voucher(voucher_pem) do
+      {:ok, voucher} -> {:ok, voucher}
+      _error -> {:error, :invalid_ownership_voucher}
     end
   end
 

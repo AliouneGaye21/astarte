@@ -28,6 +28,8 @@ defmodule Astarte.PairingWeb.AgentController do
 
   action_fallback Astarte.PairingWeb.FallbackController
 
+
+
   tags ["agent"]
   security [%{"JWT" => []}]
 

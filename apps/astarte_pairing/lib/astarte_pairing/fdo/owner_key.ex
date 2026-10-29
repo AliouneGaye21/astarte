@@ -28,33 +28,53 @@ defmodule Astarte.Pairing.FDO.OwnerKey do
   @doc """
   Lists the realm's owner key names, grouped by key algorithm.
   """
-  @spec list(String.t()) :: {:ok, map()} | term()
+  @spec list(String.t()) :: {:ok, map()} | {:error, :owner_keys_unavailable}
   def list(realm_name) do
-    Secrets.Core.get_keys(realm_name, Secrets.Core.asymmetric_key_algorithms())
+    list_for_key_types(realm_name, Secrets.Core.asymmetric_key_algorithms())
   end
 
   @doc """
   Lists the realm's owner key names for one key algorithm.
-
-  Returns `:error` if the key algorithm is unknown.
   """
-  @spec list(String.t(), String.t()) :: {:ok, map()} | term()
+  @spec list(String.t(), String.t()) ::
+          {:ok, map()} | {:error, :invalid_key_algorithm | :owner_keys_unavailable}
   def list(realm_name, key_algorithm) do
-    with {:ok, algorithm} <- Secrets.Core.string_to_key_type(key_algorithm) do
-      Secrets.Core.get_keys(realm_name, [algorithm])
+    with {:ok, key_type} <- key_type(key_algorithm) do
+      list_for_key_types(realm_name, [key_type])
+    end
+  end
+
+  @doc """
+  Lists the realm's owner key names for the given key types, as
+  `Astarte.Secrets.Core` names them (e.g. `:es256`), grouped by key type.
+  """
+  @spec list_for_key_types(String.t(), [atom()]) ::
+          {:ok, map()} | {:error, :owner_keys_unavailable}
+  def list_for_key_types(realm_name, key_types) do
+    case Secrets.Core.get_keys(realm_name, key_types) do
+      {:ok, keys} -> {:ok, keys}
+      _error -> {:error, :owner_keys_unavailable}
     end
   end
 
   @doc """
   Fetches the owner key named `key_name`.
-
-  Returns `:error` if the key algorithm is unknown, or `:not_found` if the realm
-  has no such key.
   """
-  @spec fetch(String.t(), String.t(), String.t()) :: {:ok, struct()} | :error | :not_found
+  @spec fetch(String.t(), String.t(), String.t()) ::
+          {:ok, struct()} | {:error, :invalid_key_algorithm | :key_not_found}
   def fetch(realm_name, key_algorithm, key_name) do
-    with {:ok, algorithm} <- Secrets.Core.string_to_key_type(key_algorithm) do
-      Secrets.Core.find_key(realm_name, key_name, algorithm)
+    with {:ok, key_type} <- key_type(key_algorithm) do
+      case Secrets.Core.find_key(realm_name, key_name, key_type) do
+        {:ok, key} -> {:ok, key}
+        :not_found -> {:error, :key_not_found}
+      end
+    end
+  end
+
+  defp key_type(key_algorithm) do
+    case Secrets.Core.string_to_key_type(key_algorithm) do
+      {:ok, key_type} -> {:ok, key_type}
+      :error -> {:error, :invalid_key_algorithm}
     end
   end
 end

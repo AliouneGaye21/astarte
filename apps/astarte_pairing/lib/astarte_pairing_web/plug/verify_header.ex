@@ -37,8 +37,10 @@ defmodule Astarte.PairingWeb.Plug.VerifyHeader do
     # TODO: support multiple secrets
     secret = List.first(secrets)
 
+    opts_list = if is_map(opts), do: Map.to_list(opts), else: opts
+
     merged_opts =
-      opts
+      opts_list
       |> Keyword.merge(secret: secret)
 
     GuardianVerifyHeader.call(conn, merged_opts)

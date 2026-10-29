@@ -20,6 +20,8 @@ defmodule Astarte.RealmManagementWeb.DeviceController do
   use Astarte.RealmManagementWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
+
+
   alias Astarte.RealmManagement.Devices
   alias OpenApiSpex.{Reference, Response}
 
