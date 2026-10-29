@@ -20,6 +20,8 @@ defmodule Astarte.RealmManagementWeb.InterfaceController do
   use Astarte.RealmManagementWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
+
+
   alias Astarte.Core.Interface
   alias Astarte.RealmManagement.Interfaces
   alias Astarte.RealmManagement.Interfaces.InterfacesListOptions

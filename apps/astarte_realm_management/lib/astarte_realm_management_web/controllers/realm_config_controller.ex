@@ -20,6 +20,8 @@ defmodule Astarte.RealmManagementWeb.RealmConfigController do
   use Astarte.RealmManagementWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
+
+
   alias Astarte.RealmManagement.RealmConfig
   alias Astarte.RealmManagement.RealmConfig.AuthConfig
   alias OpenApiSpex.{Reference, Schema}

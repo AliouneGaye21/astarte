@@ -30,6 +30,8 @@ defmodule Astarte.PairingWeb.OwnershipVoucherController do
 
   action_fallback Astarte.PairingWeb.FallbackController
 
+
+
   # `action_fallback` renders from the conn as it entered the action, so this
   # has to be a plug for the error view to see the GUID
   plug :assign_fdo_guid when action in [:run_to0]
@@ -268,6 +270,8 @@ defmodule Astarte.PairingWeb.OwnershipVoucherController do
       json(conn, %{data: keys_map})
     end
   end
+
+
 
   defp ensure_ownership_voucher_parameter(%{"ownership_voucher" => pem})
        when is_binary(pem) and pem != "",

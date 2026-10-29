@@ -30,6 +30,8 @@ defmodule Astarte.PairingWeb.OwnerKeyController do
 
   action_fallback Astarte.PairingWeb.FallbackController
 
+
+
   tags ["fdo"]
 
   operation :create_or_upload_key,
