@@ -20,6 +20,8 @@ defmodule Astarte.RealmManagementWeb.TriggerController do
   use Astarte.RealmManagementWeb, :controller
   use OpenApiSpex.ControllerSpecs
 
+
+
   alias Astarte.RealmManagement.Triggers
   alias Astarte.RealmManagement.Triggers.Trigger
   alias OpenApiSpex.{Reference, Schema}

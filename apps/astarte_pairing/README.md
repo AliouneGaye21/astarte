@@ -26,8 +26,8 @@ a pull request saves everyone some precious review time!
 
 ## 🧑‍🔬 Test
 
-to test pg you need a running instance of CFSSL and a cassandra-compatible
-database, (we suggest scylla)
+to test pg you need a running instance of CFSSL, a cassandra-compatible
+database (we suggest scylla), and an OpenFGA server.
 
 ```shell
 docker run --rm -d -p 9042:9042 --name scylla scylladb/scylla
@@ -35,6 +35,7 @@ docker run --rm  -d -p 5672:5672 -p 15672:15672 --name rabbit rabbitmq:3.12.0-ma
 docker run --rm -d --net=host -p 8080/tcp ispirata/docker-alpine-cfssl-autotest:astarte
 docker run --rm -d -p 8200:8200 --name openbao openbao/openbao:latest server -dev -dev-root-token-id=astarte_token
 docker run --rm -d -p 8041:8041 --name rendezvous astarte/go-fdo-server:ade68cda47-20251128 --log-level=debug rendezvous 0.0.0.0:8041 --db-type sqlite --db-dsn "file:/tmp/rendezvous.db"
+docker run --rm -d -p 8081:8080 --name openfga openfga/openfga run
 ```
 
 by default `CASSANDRA_NODES` and `CFSSL_API_URL` environment variables map to localhost, so that
