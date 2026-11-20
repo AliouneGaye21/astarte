@@ -68,7 +68,7 @@ defmodule Astarte.DataUpdaterPlant.Helpers.Device do
     interfaces_bytes = Map.fetch!(device, :interfaces_bytes)
     interfaces_msgs = Map.fetch!(device, :interfaces_msgs)
     # device <-> Astarte shared key for e2e encryption/decryption of messages
-    {:ok, key} = Secrets.encrypt_with_kek(realm_name, :crypto.strong_rand_bytes(32))
+    {:ok, key} = Astarte.Secrets.encrypt_with_kek(realm_name, :crypto.strong_rand_bytes(32))
     shared_secret = %Symmetric{k: key, alg: :aes_256_gcm}
 
     device_db_params = %{

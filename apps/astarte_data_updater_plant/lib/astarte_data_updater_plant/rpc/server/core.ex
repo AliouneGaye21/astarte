@@ -58,4 +58,12 @@ defmodule Astarte.DataUpdaterPlant.RPC.Server.Core do
         error
     end
   end
+
+  def interface_installed(realm_name, interface_name, interface_major) do
+    Phoenix.PubSub.broadcast(
+      Astarte.DataUpdaterPlant.PubSub,
+      "interface_installed:#{realm_name}:#{interface_name}:#{interface_major}",
+      :interface_installed
+    )
+  end
 end

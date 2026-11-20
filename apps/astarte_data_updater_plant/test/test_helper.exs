@@ -41,21 +41,11 @@ Mimic.copy(Astarte.DataUpdaterPlant.TimeBasedActions)
 Mimic.copy(Astarte.DataUpdaterPlant.TriggersHandler)
 Mimic.copy(Astarte.Events.Triggers)
 Mimic.copy(Astarte.Events.TriggersHandler)
-Mimic.copy(Astarte.Secrets)
 Mimic.copy(Mississippi.Consumer.MessageTracker)
 Mimic.copy(System)
 Mimic.copy(Xandra)
 
 Astarte.DataUpdaterPlant.Helpers.DataUpdater.mississippi_producer_opts!()
 |> Mississippi.Producer.start_link()
-
-{:ok, _} =
-  Astarte.Secrets.Core.create_nested_namespace([
-    "astarte_encrypted_messages_kek",
-    "default_instance"
-  ])
-
-{:ok, _} =
-  Astarte.Secrets.Core.create_nested_namespace(["astarte_encrypted_messages_kek", "instance"])
 
 ExUnit.start(capture_log: true)

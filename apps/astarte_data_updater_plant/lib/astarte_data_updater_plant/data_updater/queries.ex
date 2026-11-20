@@ -231,7 +231,11 @@ defmodule Astarte.DataUpdaterPlant.DataUpdater.Queries do
     # for unset capabilities
     capabilities = normalize_capabilities(stats.capabilities)
 
-    {:ok, shared_secret} = maybe_decrypt_shared_secret(realm, stats.shared_secret)
+    shared_secret =
+      case maybe_decrypt_shared_secret(realm, stats.shared_secret) do
+        {:ok, secret} -> secret
+        _ -> %Symmetric{k: :crypto.strong_rand_bytes(32), alg: :aes_256_gcm}
+      end
 
     # register the shared key status in DUP state, assuming that if the key is found in db
     # it has been established correctly

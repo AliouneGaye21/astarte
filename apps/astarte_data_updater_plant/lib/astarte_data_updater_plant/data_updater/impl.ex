@@ -124,6 +124,10 @@ defmodule Astarte.DataUpdaterPlant.DataUpdater.Impl do
       {:start_device_deletion, timestamp} ->
         start_device_deletion(state, timestamp)
 
+      :disconnect_device ->
+        timestamp = DateTime.utc_now() |> DateTime.to_unix(:microsecond) |> Kernel.*(10)
+        Core.Device.ask_clean_session(state, timestamp)
+
       _ ->
         {:ok, state}
     end

@@ -271,7 +271,7 @@ defmodule Astarte.DataUpdaterPlant.DataUpdater.Core.ControlHandlerTest do
       assert {:ok, _} = Impl.handle_continue(continue_arg, new_state)
     end
 
-    test "discards the message if interface loading fails", context do
+    test "emits error triggers and continues if interface loading fails", context do
       %{state: state} = context
 
       Mox.expect(ClientMock, :publish, fn _data ->
@@ -282,15 +282,21 @@ defmodule Astarte.DataUpdaterPlant.DataUpdater.Core.ControlHandlerTest do
       major_version = 1
 
       expect(Core.Device, :resend_all_properties, fn _state ->
-        {:error, {:interface_loading_failed, interface_name, major_version}}
+        {:ok, state, [{interface_name, major_version}]}
       end)
 
-      expect(Core.Device, :ask_clean_session, fn _state, _timestamp -> {:ok, state} end)
 
-      expect(Core.Trigger, :execute_device_error_triggers, fn _state,
-                                                              "interface_loading_failed",
-                                                              metadata,
-                                                              _ts ->
+
+      expect(Core.Trigger, :execute_empty_cache_received_triggers, fn _state, _timestamp ->
+        :ok
+      end)
+
+      expect(Astarte.DataUpdaterPlant.TriggersHandler, :device_error, fn _realm,
+                                                                         _device_id,
+                                                                         _groups,
+                                                                         "interface_loading_failed",
+                                                                         metadata,
+                                                                         _ts ->
         assert metadata == %{
                  "interface" => interface_name,
                  "interface_major_version" => "1"
@@ -299,15 +305,13 @@ defmodule Astarte.DataUpdaterPlant.DataUpdater.Core.ControlHandlerTest do
         :ok
       end)
 
-      assert {:discard, _result, new_state, {:continue, continue_arg}} =
+      assert {:ack, :ok, _new_state} =
                ControlHandler.handle_control(
                  state,
                  "/emptyCache",
                  "",
                  0
                )
-
-      {:ok, _} = Impl.handle_continue(continue_arg, new_state)
     end
 
     test "discards the message if sending properties to the device fails", context do

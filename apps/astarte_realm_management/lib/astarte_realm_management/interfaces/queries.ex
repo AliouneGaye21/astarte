@@ -227,13 +227,22 @@ defmodule Astarte.RealmManagement.Interfaces.Queries do
 
     consistency = Consistency.domain_model(:write)
 
-    Exandra.execute_batch(
-      Repo,
-      %Exandra.Batch{
-        queries: [interface_query | endpoints_queries]
-      },
-      consistency: consistency
-    )
+    with {:ok, _} = res <-
+           Exandra.execute_batch(
+             Repo,
+             %Exandra.Batch{
+               queries: [interface_query | endpoints_queries]
+             },
+             consistency: consistency
+           ) do
+      Astarte.RealmManagement.RPC.DataUpdaterPlant.Client.interface_installed_rpc(
+        realm_name,
+        interface_document.name,
+        interface_document.major_version
+      )
+
+      res
+    end
   end
 
   defp insert_mapping_query(

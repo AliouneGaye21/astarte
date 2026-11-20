@@ -36,8 +36,10 @@ defmodule Astarte.DataUpdaterPlant.DataUpdater.Core.ControlHandler do
   alias Astarte.DataUpdaterPlant.DataUpdater.State
   alias Astarte.DataUpdaterPlant.RPC.VMQPlugin
   alias Astarte.DataUpdaterPlant.TimeBasedActions
+  alias Astarte.DataUpdaterPlant.TriggersHandler
   alias Astarte.Secrets
   alias COSE.Keys.Symmetric
+  alias Mississippi.Consumer.DataUpdater
 
   require Logger
 
@@ -983,7 +985,7 @@ defmodule Astarte.DataUpdaterPlant.DataUpdater.Core.ControlHandler do
     resend_start = System.monotonic_time()
 
     case Core.Device.resend_all_properties(state) do
-      {:ok, new_state} ->
+      {:ok, new_state, missing_interfaces} ->
         # Track successful properties resend
         :telemetry.execute(
           [:astarte, :data_updater_plant, :control_handler, :properties_resend],
@@ -991,22 +993,9 @@ defmodule Astarte.DataUpdaterPlant.DataUpdater.Core.ControlHandler do
           %{realm: state.realm, result: "success"}
         )
 
+        handle_missing_interfaces(missing_interfaces, state, timestamp)
+
         {:ok, new_state}
-
-      {:error, {:interface_loading_failed, interface_name, major_version}} ->
-        # Track interface loading failure
-        :telemetry.execute(
-          [:astarte, :data_updater_plant, :control_handler, :properties_resend],
-          %{duration: System.monotonic_time() - resend_start},
-          %{realm: state.realm, result: "interface_loading_failed"}
-        )
-
-        interface_loading_error(
-          state,
-          timestamp,
-          interface_name,
-          major_version
-        )
 
       {:error, :sending_properties_to_interface_failed} ->
         # Track interface send failure
@@ -1062,22 +1051,32 @@ defmodule Astarte.DataUpdaterPlant.DataUpdater.Core.ControlHandler do
     Core.Error.handle_error(context, error, opts)
   end
 
-  defp interface_loading_error(state, timestamp, interface_name, major_version) do
-    context = %{state: state, timestamp: timestamp}
+  defp handle_missing_interfaces(missing_interfaces, state, timestamp) do
+    for {interface_name, major_version} <- missing_interfaces do
+      TriggersHandler.device_error(
+        state.realm,
+        state.device_id,
+        state.groups,
+        "interface_loading_failed",
+        %{
+          "interface" => interface_name,
+          "interface_major_version" => to_string(major_version)
+        },
+        timestamp
+      )
 
-    error = %{
-      message: "Cannot load interface while resending properties",
-      logger_metadata: [tag: "interface_loading_failed"],
-      extra_error_metadata: %{
-        "interface" => interface_name,
-        "interface_major_version" => to_string(major_version)
-      },
-      error_name: "interface_loading_failed",
-      error: :interface_loading_failed
-    }
+      topic = "interface_installed:#{state.realm}:#{interface_name}:#{major_version}"
+      pid = self()
 
-    opts = [update_stats: false]
-    Core.Error.handle_error(context, error, opts)
+      Task.start(fn ->
+        Phoenix.PubSub.subscribe(Astarte.DataUpdaterPlant.PubSub, topic)
+
+        receive do
+          :interface_installed ->
+            DataUpdater.handle_signal(pid, :disconnect_device)
+        end
+      end)
+    end
   end
 
   defp generic_error(state, timestamp, reason) do

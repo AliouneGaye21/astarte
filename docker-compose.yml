@@ -276,6 +276,8 @@ services:
 
   openbao:
     image: openbao/openbao:2
+    ports:
+      - "8200:8200"
     environment:
       - BAO_ADDR=http://0.0.0.0:8200
     command: server -dev -dev-listen-address="0.0.0.0:8200" -dev-root-token-id="${ASTARTE_VAULT_TOKEN}"
@@ -308,6 +310,9 @@ services:
     image: rabbitmq:4.3.1-management
     hostname: rabbitmq
     restart: on-failure
+    ports:
+      - "15672:15672"
+      - "5672:5672"
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
